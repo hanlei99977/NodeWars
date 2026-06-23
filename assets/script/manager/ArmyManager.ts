@@ -257,10 +257,13 @@ export class ArmyManager {
         army.pendingDestinationNodeId = null;
     }
 
-    // 检测同一条边上是否有两军相遇（方向相反或同向追及），按相遇时间逐次处理
+    // 检测同一条边上是否有两军相遇，根据行进方向和进度精确判断是否发生战斗
+    // 同向：进度差 < 0.05（几乎重叠）｜反向：进度之和 > 0.95（即将交错）
     private static checkEdgeEncounters(): ArmyEvent[] {
         const events: ArmyEvent[] = [];
         const visited = new Set<string>();
+        const FORWARD_ENCOUNTER_THRESHOLD = 0.05;
+        const BACKWARD_ENCOUNTER_THRESHOLD = 0.95;
 
         for (let i = 0; i < ArmyManager._armies.length; i++) {
             for (let j = i + 1; j < ArmyManager._armies.length; j++) {
@@ -276,9 +279,21 @@ export class ArmyManager {
                 if (sameEdgeForward || sameEdgeBackward) {
                     const key = `${Math.min(a.id, b.id)}_${Math.max(a.id, b.id)}`;
                     if (visited.has(key)) continue;
+
+                    // 根据方向和进度判定是否触发遭遇
+                    let shouldFight = false;
+                    if (sameEdgeForward) {
+                        // 同向：进度差 < 0.05，后方几乎追上前方
+                        shouldFight = Math.abs(a.progress - b.progress) < FORWARD_ENCOUNTER_THRESHOLD;
+                    } else {
+                        // 反向：进度之和 > 0.95，两军即将擦肩交错
+                        shouldFight = a.progress + b.progress > BACKWARD_ENCOUNTER_THRESHOLD;
+                    }
+
+                    if (!shouldFight) continue;
                     visited.add(key);
 
-                    // 双方都在同一条边上，触发遭遇战
+                    // 双方在同一条边上且满足遭遇条件，触发遭遇战
                     events.push(ArmyManager.makeEncounterEvent(a, b));
                 }
             }
