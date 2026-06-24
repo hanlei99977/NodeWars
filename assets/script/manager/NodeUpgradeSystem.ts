@@ -65,9 +65,9 @@ export class NodeUpgradeSystem {
     ): UpgradeEvent[] {
         const events: UpgradeEvent[] = [];
 
-        // 筛选可升级节点：己方、等级≤2、空闲、符合类型
+        // 筛选可升级节点：属于该owner、等级≤2、空闲、符合类型
         const candidates = nodes.filter(n => {
-            if (n.ownerId !== OwnerType.PLAYER) return false;
+            if (n.ownerId !== ownerId) return false;
             if (n.level >= NodeLevel.LV3) return false;
             if (!n.isIdle) return false;
             if (nodeTypeFilter === 'fortress' && n.type !== NodeType.FORTRESS) return false;
@@ -78,7 +78,7 @@ export class NodeUpgradeSystem {
         if (candidates.length === 0) return events;
 
         // 计算每个候选节点距前线的距离（BFS到最近敌军的跳数）
-        const frontDist = NodeUpgradeSystem.calcFrontDistance(candidates, nodes, adjList);
+        const frontDist = NodeUpgradeSystem.calcFrontDistance(candidates, nodes, adjList, ownerId);
         // 远离前线的优先升级（距离大 → 先升级）
         candidates.sort((a, b) => (frontDist.get(b.id) ?? 0) - (frontDist.get(a.id) ?? 0));
 
@@ -120,15 +120,17 @@ export class NodeUpgradeSystem {
     }
 
     // 计算每个候选节点距最近敌军节点的最短跳数（BFS），用于批量升级排序
+    // 敌军 = ownerId 为己方以外的非中立节点
     private static calcFrontDistance(
         candidates: NodeEntity[],
         allNodes: NodeEntity[],
         adjList: number[][],
+        ownerId: string,
     ): Map<number, number> {
         const distMap = new Map<number, number>();
         // 收集所有敌军节点ID
         const enemyIds = allNodes
-            .filter(n => n.ownerId !== OwnerType.PLAYER && n.ownerId !== OwnerType.NEUTRAL)
+            .filter(n => n.ownerId !== ownerId && n.ownerId !== OwnerType.NEUTRAL)
             .map(n => n.id);
 
         if (enemyIds.length === 0) {
