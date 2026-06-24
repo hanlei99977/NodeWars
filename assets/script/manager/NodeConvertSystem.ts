@@ -1,16 +1,7 @@
 import { NodeEntity, ConvertTask } from '../entity/NodeEntity';
-import { NodeType, ConvertTaskState } from '../config/EnumDefine';
+import { NodeType, ConvertTaskState, ConvertEventType } from '../config/EnumDefine';
 import { NodeConfig } from '../config/NodeConfig';
 import { EconomySystem } from '../economy/EconomySystem';
-
-// 转换事件类型
-export enum ConvertEventType {
-    STARTED = 'started',               // 转换已开始
-    COMPLETED = 'completed',           // 转换完成
-    INSUFFICIENT_GOLD = 'insufficient_gold', // 金币不足
-    SAME_TYPE = 'same_type',           // 已是该类型，无需转换
-    BUSY = 'busy',                     // 节点忙碌中（有进行中的升级/转换）
-}
 
 // 转换事件数据
 export class ConvertEvent {

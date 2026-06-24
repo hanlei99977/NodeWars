@@ -2,17 +2,17 @@ import { _decorator, Component } from 'cc';
 import { NodeEntity } from '../entity/NodeEntity';
 import { EdgeEntity } from '../entity/EdgeEntity';
 import { ArmyEntity } from '../entity/ArmyEntity';
-import { GameState, MapSize, Difficulty, FogMode, GameSpeed, OwnerType } from '../config/EnumDefine';
+import { GameState, MapSize, Difficulty, FogMode, GameSpeed, OwnerType, ArmyEventType, EconomyEventType, NodeBattleOutcome, AIAllianceState } from '../config/EnumDefine';
 import { GameConfig } from '../config/GameConfig';
 import { MapGenerator, MapGenerateResult } from '../map/MapGenerator';
-import { ArmyManager, ArmyEventType } from '../manager/ArmyManager';
+import { ArmyManager } from '../manager/ArmyManager';
 import { NodeBattleSystem } from '../battle/NodeBattleSystem';
 import { ArmyCollisionSystem } from '../battle/ArmyCollisionSystem';
-import { EconomySystem, EconomyEventType } from '../economy/EconomySystem';
+import { EconomySystem } from '../economy/EconomySystem';
 import { RecruitSystem } from '../recruit/RecruitSystem';
 import { NodeUpgradeSystem } from '../manager/NodeUpgradeSystem';
 import { NodeConvertSystem } from '../manager/NodeConvertSystem';
-import { AIController, AIAllianceState } from '../ai/AIController';
+import { AIController } from '../ai/AIController';
 import { FogSystem } from '../fog/FogSystem';
 import { EventSystem } from '../event/EventSystem';
 import { SaveSystem } from '../save/SaveSystem';
@@ -202,10 +202,10 @@ export class GameManager extends Component {
 
         const result = NodeBattleSystem.resolve(army, node);
 
-        if (result.outcome === 'attacker_wins') {
+        if (result.outcome === NodeBattleOutcome.ATTACKER_WINS) {
             // 节点易主 → 通知迷雾
             FogSystem.recordAttack(node, army.ownerId);
-        } else if (result.outcome === 'defender_wins') {
+        } else if (result.outcome === NodeBattleOutcome.DEFENDER_WINS) {
             // 攻击失败 → 记录攻击情报（不记兵力）
             FogSystem.recordAttack(node, army.ownerId);
         }

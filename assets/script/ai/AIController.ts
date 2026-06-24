@@ -1,7 +1,7 @@
 import { NodeEntity } from '../entity/NodeEntity';
 import { EdgeEntity } from '../entity/EdgeEntity';
 import { ArmyEntity } from '../entity/ArmyEntity';
-import { NodeType, OwnerType, Difficulty } from '../config/EnumDefine';
+import { NodeType, OwnerType, Difficulty, AIAllianceState } from '../config/EnumDefine';
 import { AIConfig } from '../config/AIConfig';
 import { RecruitConfig } from '../config/RecruitConfig';
 import { NodeConfig } from '../config/NodeConfig';
@@ -12,13 +12,6 @@ import { NodeUpgradeSystem } from '../manager/NodeUpgradeSystem';
 import { NodeConvertSystem } from '../manager/NodeConvertSystem';
 import { EdgeUpgradeSystem } from '../manager/EdgeUpgradeSystem';
 import { ArmyManager } from '../manager/ArmyManager';
-
-// AI状态
-export enum AIAllianceState {
-    FREE = 'free',               // 各自为战
-    ALLIED = 'allied',           // 结成联盟（不互相攻击）
-    JOINT_ATTACK = 'joint_attack', // 联合进攻玩家
-}
 
 // AI思考结果（供外层记录日志/调试）
 export class AIThinkResult {

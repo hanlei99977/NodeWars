@@ -1,15 +1,8 @@
 import { NodeEntity } from '../entity/NodeEntity';
 import { ArmyEntity } from '../entity/ArmyEntity';
-import { SpecialNodeType, ArmyState } from '../config/EnumDefine';
+import { SpecialNodeType, ArmyState, NodeBattleOutcome } from '../config/EnumDefine';
 import { BattleConfig } from '../config/BattleConfig';
 import { NodeConfig } from '../config/NodeConfig';
-
-// 节点攻占结果
-export enum NodeBattleOutcome {
-    ATTACKER_WINS = 'attacker_wins',     // 攻占成功
-    DEFENDER_WINS = 'defender_wins',     // 防守成功，攻击方全灭
-    SAME_OWNER = 'same_owner',           // 同方到达，转入驻军
-}
 
 // 节点攻占结果数据
 export class NodeBattleResult {

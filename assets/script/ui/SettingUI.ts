@@ -1,13 +1,8 @@
 import { _decorator, Component, Label, Button, Slider, sys } from 'cc';
+import { Language } from '../config/EnumDefine';
 import { SaveSystem } from '../save/SaveSystem';
 
 const { ccclass, property } = _decorator;
-
-// 语言选项
-export enum Language {
-    ZH = 'zh',
-    EN = 'en',
-}
 
 const LANGUAGE_NAMES: Record<Language, string> = {
     [Language.ZH]: '中文',

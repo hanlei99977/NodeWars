@@ -1,16 +1,8 @@
 import { EdgeEntity } from '../entity/EdgeEntity';
 import { NodeEntity } from '../entity/NodeEntity';
-import { EdgeLevel } from '../config/EnumDefine';
+import { EdgeLevel, EdgeUpgradeEventType } from '../config/EnumDefine';
 import { EdgeConfig } from '../config/EdgeConfig';
 import { EconomySystem } from '../economy/EconomySystem';
-
-// 线路升级事件类型
-export enum EdgeUpgradeEventType {
-    STARTED = 'started',               // 升级完成（即时生效）
-    INSUFFICIENT_GOLD = 'insufficient_gold', // 金币不足
-    MAX_LEVEL = 'max_level',           // 已满级
-    NOT_OWNED = 'not_owned',           // 两端节点不全为己方所有
-}
 
 // 线路升级事件数据
 export class EdgeUpgradeEvent {

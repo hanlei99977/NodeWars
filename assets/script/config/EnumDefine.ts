@@ -89,3 +89,60 @@ export enum ArmyState {
     MOVING = 'moving',
     STATIONED = 'stationed',
 }
+// 征兵事件类型
+export enum RecruitEventType {
+    STARTED = 'started',
+    COMPLETED = 'completed',
+    INSUFFICIENT_GOLD = 'insufficient_gold',
+    QUEUE_FULL = 'queue_full',
+}
+// 升级事件类型
+export enum UpgradeEventType {
+    STARTED = 'started',
+    COMPLETED = 'completed',
+    INSUFFICIENT_GOLD = 'insufficient_gold',
+    MAX_LEVEL = 'max_level',
+    BUSY = 'busy',
+}
+// 转换事件类型
+export enum ConvertEventType {
+    STARTED = 'started',
+    COMPLETED = 'completed',
+    INSUFFICIENT_GOLD = 'insufficient_gold',
+    SAME_TYPE = 'same_type',
+    BUSY = 'busy',
+}
+// 行军事件类型
+export enum ArmyEventType {
+    ARRIVED_AT_NODE = 'arrived_at_node',
+    EDGE_ENCOUNTER = 'edge_encounter',
+}
+// 经济事件类型
+export enum EconomyEventType {
+    GOLD_ZERO_WARNING = 'gold_zero_warning',
+    DISBAND_SOLDIERS = 'disband_soldiers',
+}
+// 线路升级事件类型
+export enum EdgeUpgradeEventType {
+    STARTED = 'started',
+    INSUFFICIENT_GOLD = 'insufficient_gold',
+    MAX_LEVEL = 'max_level',
+    NOT_OWNED = 'not_owned',
+}
+// 节点攻占结果
+export enum NodeBattleOutcome {
+    ATTACKER_WINS = 'attacker_wins',
+    DEFENDER_WINS = 'defender_wins',
+    SAME_OWNER = 'same_owner',
+}
+// AI联盟状态
+export enum AIAllianceState {
+    FREE = 'free',
+    ALLIED = 'allied',
+    JOINT_ATTACK = 'joint_attack',
+}
+// 语言选项
+export enum Language {
+    ZH = 'zh',
+    EN = 'en',
+}

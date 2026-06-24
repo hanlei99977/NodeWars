@@ -1,14 +1,8 @@
 import { NodeEntity } from '../entity/NodeEntity';
 import { ArmyEntity } from '../entity/ArmyEntity';
-import { OwnerType, SpecialNodeType } from '../config/EnumDefine';
+import { OwnerType, SpecialNodeType, EconomyEventType } from '../config/EnumDefine';
 import { NodeConfig } from '../config/NodeConfig';
 import { RecruitConfig } from '../config/RecruitConfig';
-
-// 经济事件类型
-export enum EconomyEventType {
-    GOLD_ZERO_WARNING = 'gold_zero_warning',   // 金币降为0，弹窗提醒
-    DISBAND_SOLDIERS = 'disband_soldiers',     // 金币不足，即时解散士兵
-}
 
 // 经济事件数据
 export class EconomyEvent {

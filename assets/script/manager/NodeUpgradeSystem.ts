@@ -1,16 +1,7 @@
 import { NodeEntity, UpgradeTask } from '../entity/NodeEntity';
-import { NodeLevel, UpgradeTaskState, OwnerType, NodeType } from '../config/EnumDefine';
+import { NodeLevel, UpgradeTaskState, OwnerType, NodeType, UpgradeEventType } from '../config/EnumDefine';
 import { NodeConfig } from '../config/NodeConfig';
 import { EconomySystem } from '../economy/EconomySystem';
-
-// 升级事件类型
-export enum UpgradeEventType {
-    STARTED = 'started',               // 升级已开始
-    COMPLETED = 'completed',           // 升级完成
-    INSUFFICIENT_GOLD = 'insufficient_gold', // 金币不足
-    MAX_LEVEL = 'max_level',           // 已满级
-    BUSY = 'busy',                     // 节点忙碌中（有进行中的升级/转换）
-}
 
 // 升级事件数据
 export class UpgradeEvent {

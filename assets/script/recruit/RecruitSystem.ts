@@ -1,17 +1,9 @@
 import { NodeEntity, RecruitTask } from '../entity/NodeEntity';
-import { SpecialNodeType, RecruitTaskState, OwnerType } from '../config/EnumDefine';
+import { SpecialNodeType, RecruitTaskState, OwnerType, RecruitEventType } from '../config/EnumDefine';
 import { RecruitConfig } from '../config/RecruitConfig';
 import { NodeConfig } from '../config/NodeConfig';
 import { EconomySystem } from '../economy/EconomySystem';
 import { EventSystem } from '../event/EventSystem';
-
-// 征兵事件类型
-export enum RecruitEventType {
-    STARTED = 'started',       // 开始征兵
-    COMPLETED = 'completed',   // 完成一组征兵
-    INSUFFICIENT_GOLD = 'insufficient_gold',   // 金币不足
-    QUEUE_FULL = 'queue_full', // 队列已满
-}
 
 // 征兵事件数据
 export class RecruitEvent {

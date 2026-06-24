@@ -1,15 +1,9 @@
 import { ArmyEntity } from '../entity/ArmyEntity';
 import { EdgeEntity } from '../entity/EdgeEntity';
 import { NodeEntity } from '../entity/NodeEntity';
-import { OwnerType, ArmyState } from '../config/EnumDefine';
+import { OwnerType, ArmyState, ArmyEventType } from '../config/EnumDefine';
 import { ArmyConfig } from '../config/ArmyConfig';
 import { EdgeConfig } from '../config/EdgeConfig';
-
-// 行军事件类型（update 的返回值，供外层处理节点到达/边遭遇等逻辑）
-export enum ArmyEventType {
-    ARRIVED_AT_NODE = 'arrived_at_node',   // 军队到达节点
-    EDGE_ENCOUNTER = 'edge_encounter',     // 两军在边上相遇
-}
 
 // 行军事件数据
 export class ArmyEvent {
