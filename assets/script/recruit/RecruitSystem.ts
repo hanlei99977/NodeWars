@@ -3,6 +3,7 @@ import { SpecialNodeType, RecruitTaskState, OwnerType } from '../config/EnumDefi
 import { RecruitConfig } from '../config/RecruitConfig';
 import { NodeConfig } from '../config/NodeConfig';
 import { EconomySystem } from '../economy/EconomySystem';
+import { EventSystem } from '../event/EventSystem';
 
 // 征兵事件类型
 export enum RecruitEventType {
@@ -44,12 +45,13 @@ export class RecruitSystem {
         // 扣减金币（先扣后练，节点攻占时不返还）
         EconomySystem.spend(ownerId, RecruitConfig.GOLD_COST);
 
-        // 计算实际训练时间（军营特殊节点-30%时间）
+        // 计算实际训练时间：基础时间 × (1-军营缩减) × 战争动员加速系数
         const baseTime = RecruitConfig.TIME;
         const reduction = node.specialType === SpecialNodeType.BARRACKS
             ? (NodeConfig.SPECIAL_RECRUIT_TIME_REDUCTION[SpecialNodeType.BARRACKS] || 0)
             : 0;
-        const actualTime = baseTime * (1 - reduction);
+        const mobilizationMultiplier = EventSystem.getWarMobilizationMultiplier(ownerId);
+        const actualTime = baseTime * (1 - reduction) * mobilizationMultiplier;
 
         // 创建征兵任务加入队列
         const task = new RecruitTask(RecruitConfig.SOLDIER_COUNT, actualTime);
