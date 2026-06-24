@@ -153,6 +153,7 @@ export class ArmyManager {
     }
 
     // BFS查找两节点间最短路径（跳数最少），返回节点ID序列，不可达返回null
+    // 返回的值是节点ID数组
     static findPath(fromNodeId: number, toNodeId: number): number[] | null {
         if (fromNodeId === toNodeId) return [fromNodeId];
         if (fromNodeId < 0 || fromNodeId >= ArmyManager._nodeCount) return null;
@@ -187,13 +188,47 @@ export class ArmyManager {
         return null; // 不可达
     }
 
-    // 设置军队的待执行改道目标，军队将在到达下一节点后自动重新寻路
+    // 设置军队改道目标。
+    // 根据当前军队行进进度判断离哪个端点更近，以该端点为起点计算新路径。
+    // - 同向（继续朝当前终点前进）：标记 pendingDestinationNodeId，到达下一节点后自动改道
+    // - 反向（需要掉头）：立即修改 progress = 1 - progress，插入掉头节点并替换后续路径
     static setReroute(armyId: number, destNodeId: number): boolean {
-        // 只有移动中的军队才能设置改道
         const army = ArmyManager._armies.find(a => a.id === armyId);
         if (!army || army.state !== ArmyState.MOVING) return false;
-        // 设置待执行改道目标
-        army.pendingDestinationNodeId = destNodeId;
+
+        const edgeStart = army.currentNodeId;
+        const edgeEnd = army.nextNodeId;
+
+        // 距哪端更近就以哪端为路径起点
+        const closerNodeId = army.progress <= 0.5 ? edgeStart : edgeEnd;
+        const fartherNodeId = army.progress < 0.5 ? edgeEnd : edgeStart;
+
+        const newPath = ArmyManager.findPath(closerNodeId, destNodeId);
+        if (!newPath || newPath.length < 1) return false;
+
+        // 判断新路径是否与当前方向一致
+        const continuesSameDirection = closerNodeId === edgeStart
+            ? (newPath.length >= 2 && newPath[1] === edgeEnd)    // 初始节点=源节点，下一跳=终节点 → 同向
+            : (newPath.length >= 2 && newPath[1] !== edgeStart); // 初始节点=终节点，下一跳≠源节点 → 同向
+
+        if (continuesSameDirection) {
+            // 同向：等待到达下一节点后执行改道
+            army.pendingDestinationNodeId = destNodeId;
+        } else {
+            // 反向：立即掉头
+            // pathNodeIds: [prefix..., edgeStart, edgeEnd, suffix...]
+            // 变为:       [prefix..., edgeStart, edgeEnd, edgeStart, X, Y, ...]
+            const prefix = army.pathNodeIds.slice(0, army.currentEdgeIndex + 2); // 含 edgeStart, edgeEnd
+            const insertSuffix = closerNodeId === edgeStart
+                ? newPath                               // [edgeStart, X, Y, ...] — 掉头后重回 edgeStart, 再接后续
+                : newPath.slice(1);                     // [edgeStart, X, Y, ...] — closer=edgeEnd 已在 prefix 中
+
+            army.pathNodeIds = [...prefix, ...insertSuffix];
+            army.currentEdgeIndex = army.currentEdgeIndex + 1; // 指向 edgeEnd, nextNodeId 变为 edgeStart
+            army.progress = 1 - army.progress;
+            army.pendingDestinationNodeId = null;
+        }
+
         return true;
     }
 
