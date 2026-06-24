@@ -201,7 +201,6 @@ export class ArmyManager {
 
         // 距哪端更近就以哪端为路径起点
         const closerNodeId = army.progress <= 0.5 ? edgeStart : edgeEnd;
-        const fartherNodeId = army.progress < 0.5 ? edgeEnd : edgeStart;
 
         const newPath = ArmyManager.findPath(closerNodeId, destNodeId);
         if (!newPath || newPath.length < 1) return false;
