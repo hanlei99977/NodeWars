@@ -1,6 +1,6 @@
 import {
     _decorator, Component, Node, Canvas, UITransform, Label, Button, Slider,
-    Camera, EventHandler, Enum,
+    EventHandler, Enum,
 } from 'cc';
 import { LobbyUI } from '../ui/LobbyUI';
 import { HUDController } from '../ui/HUDController';
@@ -10,13 +10,13 @@ import { ArmyPanel } from '../ui/ArmyPanel';
 import { SaveSlotsUI } from '../ui/SaveSlotsUI';
 import { GameOverUI } from '../ui/GameOverUI';
 import { GameManager } from '../manager/GameManager';
-import { CameraController } from '../view/CameraController';
 
 const { ccclass, executeInEditMode, property } = _decorator;
 
 const SceneType = Enum({
     LOBBY: 0,
     GAME: 1,
+    NONE: 2,
 });
 
 // —— 构建工具函数 ——
@@ -68,7 +68,7 @@ function bindClick(btn: Button, target: Node, comp: string, handler: string): vo
 export class SceneBuilder extends Component {
 
     @property({ type: SceneType })
-    sceneType: number = SceneType.LOBBY;
+    sceneType: number = SceneType.NONE;
 
     onLoad(): void {
         const canvas = this.ensureCanvas();
@@ -78,24 +78,20 @@ export class SceneBuilder extends Component {
         if (this.sceneType === SceneType.LOBBY) {
             if (canvas.getChildByName('Title')) return;
             this.buildLobby(canvas);
-        } else {
+        } else if (this.sceneType === SceneType.GAME) {
             if (canvas.getChildByName('GameOverUI')) return;
             this.buildGame(canvas);
         }
     }
 
-    // 确保有 Canvas 根节点
+    // 确保有 Canvas 根节点（不再创建，只查找）
     private ensureCanvas(): Node | null {
-        let c = this.node.getComponent(Canvas);// 尝试获取当前节点上的 Canvas 组件
-        if (c) return this.node;// 如果当前节点已经有 Canvas 组件，则直接返回当前节点
+        let c = this.node.getComponent(Canvas);
+        if (c) return this.node;
         const p = this.node.parent;
         if (p && p.getComponent(Canvas)) return p;
-        // 无 Canvas，创建一个挂本节点下
-        const cv = new Node('Canvas');
-        cv.addComponent(Canvas);
-        cv.addComponent(UITransform).setContentSize(960, 640);
-        this.node.addChild(cv);
-        return cv;
+        // 场景模板创建时应该已有 Canvas，找不到则直接以 this.node 为根构建
+        return this.node;
     }
 
     // ======================== LOBBY ========================
@@ -199,12 +195,6 @@ export class SceneBuilder extends Component {
         bindClick(pause.btn,  hud, 'HUDController', 'onPauseClicked');
         bindClick(spPrev.btn, hud, 'HUDController', 'onSpeedPrev');
         bindClick(spNext.btn, hud, 'HUDController', 'onSpeedNext');
-
-        // -- 摄像机 --
-        const camNode = make(canvas.parent || canvas, 'MainCamera', 0, 0, 1, 1);
-        const camComp = camNode.addComponent(Camera);
-        const camCtrl = camNode.addComponent(CameraController);
-        camCtrl.mainCamera = camComp;
 
         // -- NodePanel --
         const panel = make(canvas, 'NodePanel', 460, 0, 320, 640);
