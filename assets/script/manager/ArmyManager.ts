@@ -50,6 +50,10 @@ export class ArmyManager {
         }
     }
 
+    static get adjList(): number[][] {
+        return ArmyManager._adjList;
+    }
+
     // 创建一支新军队（从节点派出），返回创建的ArmyEntity
     static createArmy(ownerId: OwnerType, soldierCount: number, pathNodeIds: number[]): ArmyEntity | null {
         if (soldierCount <= 0 || pathNodeIds.length < 2) return null;

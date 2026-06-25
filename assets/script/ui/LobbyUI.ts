@@ -21,7 +21,7 @@ const DIFFICULTY_NAMES: Record<Difficulty, string> = {
 
 // 难度描述
 const DIFFICULTY_DESC: Record<Difficulty, string> = {
-    [Difficulty.EASY]: 'AI随机扩张，不会计算攻击力',
+    [Difficulty.EASY]: 'AI随机扩张,不会计算攻击力',
     [Difficulty.NORMAL]: 'AI计算攻占所需兵力',
     [Difficulty.HARD]: 'AI综合评判收益与防御',
 };
@@ -177,7 +177,8 @@ export class LobbyUI extends Component {
         const speed = this._gameSpeedValues[this._gameSpeedIndex] as GameSpeed;
         // 将新游戏参数传递给 GameManager
         NewGameConfig.set(mapSize, this._aiCount, difficulty, fogMode, speed);
-        director.loadScene(LobbyUI.GAME_SCENE);
+        director.loadScene(LobbyUI.GAME_SCENE);// 加载游戏场景
+        console.log(`Starting new game: mapSize=${mapSize}, aiCount=${this._aiCount}, difficulty=${difficulty}, fogMode=${fogMode}, speed=${speed}`);
     }
 
     onContinueClicked(): void {

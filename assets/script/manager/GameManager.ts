@@ -1,8 +1,8 @@
-import { _decorator, Component, director } from 'cc';
+import { _decorator, Component, director, Node, Graphics, Color, Label, UITransform, EventTouch } from 'cc';
 import { NodeEntity } from '../entity/NodeEntity';
 import { EdgeEntity } from '../entity/EdgeEntity';
 import { ArmyEntity } from '../entity/ArmyEntity';
-import { GameState, MapSize, Difficulty, FogMode, GameSpeed, OwnerType, ArmyEventType, EconomyEventType, NodeBattleOutcome, AIAllianceState } from '../config/EnumDefine';
+import { GameState, MapSize, Difficulty, FogMode, GameSpeed, OwnerType, ArmyEventType, EconomyEventType, NodeBattleOutcome, AIAllianceState, NodeType } from '../config/EnumDefine';
 import { GameConfig } from '../config/GameConfig';
 import { MapGenerator, MapGenerateResult } from '../map/MapGenerator';
 import { ArmyManager } from '../manager/ArmyManager';
@@ -20,6 +20,7 @@ import { HUDController } from '../ui/HUDController';
 import { SaveSlotsUI } from '../ui/SaveSlotsUI';
 import { GameOverUI } from '../ui/GameOverUI';
 import { NewGameConfig } from '../ui/LobbyUI';
+import { NodePanel } from '../ui/NodePanel';
 
 const { ccclass, property } = _decorator;
 
@@ -36,6 +37,39 @@ export class GameManager extends Component {
 
     @property(GameOverUI)
     gameOverUI: GameOverUI | null = null;
+
+    @property(NodePanel)
+    nodePanel: NodePanel | null = null;
+
+    // --- Map Layer ---
+    private _mapLayer: Node | null = null;
+    private _nodeGraphics: (Graphics | null)[] = [];
+    private _nodeOwnerLabels: (Label | null)[] = [];
+    private _armyViewNodes: Map<number, Node> = new Map();
+
+    private static readonly NODE_RADIUS = 18;// 节点半径
+    private static readonly OWNER_COLORS: Record<string, Color> = {
+        [OwnerType.NEUTRAL]:  new Color(160, 160, 160),
+        [OwnerType.PLAYER]:   new Color(64, 140, 255),
+    };
+    private static readonly EDGE_COLORS: Record<number, Color> = {
+        1: new Color(120, 120, 120),
+        2: new Color(80, 180, 80),
+        3: new Color(255, 180, 40),
+    };
+    private static readonly EDGE_WIDTHS: Record<number, number> = { 1: 2, 2: 4, 3: 6 };
+    private static readonly AI_COLORS: Color[] = [
+        new Color(220, 60, 60),   // 红
+        new Color(220, 180, 20),  // 黄
+        new Color(160, 40, 200),  // 紫
+        new Color(40, 160, 160),  // 青
+        new Color(220, 120, 60),  // 橙
+        new Color(60, 160, 60),   // 绿
+        new Color(200, 60, 140),  // 粉
+        new Color(80, 80, 180),   // 靛
+        new Color(180, 140, 40),  // 棕
+        new Color(120, 180, 60),  // 黄绿
+    ];
 
     // --- 游戏状态 ---
     private _gameState: GameState = GameState.PLAYING;
@@ -114,6 +148,7 @@ export class GameManager extends Component {
 
         // 重初始化各子系统
         this.initSystems(false);
+        this.renderMap();
         this.wireUI();
         this.changeState(GameState.PLAYING);
     }
@@ -143,6 +178,7 @@ export class GameManager extends Component {
 
         // 3. 初始化各子系统（全新开局）
         this.initSystems(true);
+        this.renderMap();
         this.wireUI();
         this.changeState(GameState.PLAYING);
     }
@@ -231,7 +267,13 @@ export class GameManager extends Component {
             this.hud.refresh(this._totalTime, this._gameState, AIController.allianceState);
         }
 
-        // --- 9. 自动保存 ---
+        // --- 9. 刷新地图视图 ---
+        this.refreshMapViews();
+
+        // --- 10. 刷新军队视图 ---
+        this.refreshArmyViews();
+
+        // --- 11. 自动保存 ---
         this.autoSave();
     }
 
@@ -377,5 +419,240 @@ export class GameManager extends Component {
     // 调速
     setGameSpeed(speed: GameSpeed): void {
         this._gameSpeed = speed;
+    }
+
+    // ==================== 地图视图 ====================
+
+    // 生成整张地图的视觉表示：节点圆 + 等级/驻军标签 + 线路
+    private renderMap(): void {
+        this.clearMap();
+
+        this._mapLayer = new Node('MapLayer');
+        this.node.addChild(this._mapLayer);
+
+        // 给 Canvas → MapLayer 居中偏移（原点放中间）
+        this._mapLayer.setPosition(0, -40, 0);
+
+        // 先画边（在下层），后画节点（在上层）
+        for (const edge of this._edges) {
+            this.createEdgeGraphic(edge);
+        }
+
+        this._nodeGraphics = new Array(this._nodes.length).fill(null);
+        this._nodeOwnerLabels = new Array(this._nodes.length).fill(null);
+
+        for (const n of this._nodes) {
+            this.createNodeGraphic(n);
+        }
+    }
+
+    // 清除旧地图
+    private clearMap(): void {
+        this._armyViewNodes.forEach(n => n.destroy());
+        this._armyViewNodes.clear();
+        if (this._mapLayer) {
+            this._mapLayer.destroy();
+            this._mapLayer = null;
+        }
+        this._nodeGraphics = [];
+        this._nodeOwnerLabels = [];
+    }
+
+    // 创建一条线段的视觉节点
+    private createEdgeGraphic(edge: EdgeEntity): void {
+        const gNode = new Node(`Edge_${edge.id}`);
+        const g = gNode.addComponent(Graphics);
+        const posA = this._nodes[edge.nodeAId].position;
+        const posB = this._nodes[edge.nodeBId].position;
+        g.strokeColor = GameManager.EDGE_COLORS[edge.level] || GameManager.EDGE_COLORS[1];
+        g.lineWidth = GameManager.EDGE_WIDTHS[edge.level] || 2;
+        g.moveTo(posA.x, posA.y);
+        g.lineTo(posB.x, posB.y);
+        g.stroke();
+        this._mapLayer!.addChild(gNode);
+    }
+
+    // 为一个节点创建圆形图形 + 信息标签 + 点击事件
+    private createNodeGraphic(n: NodeEntity): void {
+        const wrapper = new Node(`Node_${n.id}`);
+        wrapper.setPosition(n.position.x, n.position.y, 0);
+        const ui = wrapper.addComponent(UITransform);
+        ui.setContentSize(GameManager.NODE_RADIUS * 2 + 12, GameManager.NODE_RADIUS * 2 + 12);
+
+        // 圆形 Graphics
+        const circle = new Node('Circle');
+        const cg = circle.addComponent(Graphics);
+        const color = this.getOwnerColor(n.ownerId);
+        cg.fillColor = color;
+        cg.strokeColor = new Color(40, 40, 40);
+        cg.lineWidth = 1.5;
+        cg.circle(0, 0, GameManager.NODE_RADIUS);
+        cg.fill();
+        cg.stroke();
+        wrapper.addChild(circle);
+        this._nodeGraphics[n.id] = cg;
+
+        // 等级标签（正上方）
+        const lvlLabel = new Node('LevelLabel');
+        const lvlL = lvlLabel.addComponent(Label);
+        lvlL.string = `Lv${n.level}`;
+        lvlL.fontSize = 14;
+        lvlL.color = Color.WHITE;
+        lvlLabel.getComponent(UITransform)!.setContentSize(50, 20);
+        lvlLabel.setPosition(0, GameManager.NODE_RADIUS + 12, 0);
+        wrapper.addChild(lvlLabel);
+
+        // 驻军/所有者标签（正下方）
+        const infoLabel = new Node('InfoLabel');
+        const infoL = infoLabel.addComponent(Label);
+        infoL.string = `${n.garrisonCount}`;
+        infoL.fontSize = 13;
+        infoL.color = new Color(220, 220, 220);
+        infoLabel.getComponent(UITransform)!.setContentSize(80, 22);
+        infoLabel.setPosition(0, -GameManager.NODE_RADIUS - 14, 0);
+        wrapper.addChild(infoLabel);
+        this._nodeOwnerLabels[n.id] = infoL;
+
+        // 点击事件 → 打开 NodePanel
+        wrapper.on(Node.EventType.TOUCH_START, (e: EventTouch) => {
+            this.onNodeClicked(n.id, e);
+        });
+
+        this._mapLayer!.addChild(wrapper);
+    }
+
+    // 点击某个节点 → 弹出 NodePanel 并绑定数据
+    private onNodeClicked(nodeId: number, e: EventTouch): void {
+        if (!this.nodePanel) return;
+        const node = this._nodes[nodeId];
+        if (!node) return;
+
+        this.nodePanel.bindToEntity(node, OwnerType.PLAYER);
+        this.nodePanel.node.active = true;
+
+        // 绑定回调
+        this.nodePanel.onUpgrade = (id) => NodeUpgradeSystem.startUpgrade(this._nodes[id], OwnerType.PLAYER);
+        this.nodePanel.onConvertToFortress = (id) => NodeConvertSystem.startConvert(this._nodes[id], NodeType.FORTRESS, OwnerType.PLAYER);
+        this.nodePanel.onConvertToMarket = (id) => NodeConvertSystem.startConvert(this._nodes[id], NodeType.MARKET, OwnerType.PLAYER);
+        this.nodePanel.onRecruit = (id) => RecruitSystem.startRecruit(this._nodes[id], OwnerType.PLAYER);
+
+        this.nodePanel.onSendTroops = (id, count) => {
+            if (count <= 0 || count >= this._nodes[id].garrisonCount) return;
+            this._nodes[id].garrisonCount -= count;
+            // 默认向邻接的第一个节点移动（后续可改为选择目标节点）
+            const neighbors = ArmyManager.adjList[id];
+            const target = neighbors && neighbors.length > 0 ? neighbors[0] : -1;
+            if (target < 0) { this._nodes[id].garrisonCount += count; return; }
+            const path = ArmyManager.findPath(id, target);
+            if (path && path.length >= 2) {
+                ArmyManager.createArmy(OwnerType.PLAYER, count, path);
+            } else {
+                this._nodes[id].garrisonCount += count;
+            }
+        };
+
+        this.nodePanel.onClose = () => { if (this.nodePanel) this.nodePanel.node.active = false; };
+        this.nodePanel.onBatchUpgradeAll = () => NodeUpgradeSystem.batchUpgrade(this._nodes, 'all', OwnerType.PLAYER, ArmyManager.adjList);
+        this.nodePanel.onBatchUpgradeFortress = () => NodeUpgradeSystem.batchUpgrade(this._nodes, 'fortress', OwnerType.PLAYER, ArmyManager.adjList);
+        this.nodePanel.onBatchUpgradeMarket = () => NodeUpgradeSystem.batchUpgrade(this._nodes, 'market', OwnerType.PLAYER, ArmyManager.adjList);
+
+        this.refreshMapViews();
+    }
+
+    // 每帧刷新节点颜色 / 标签 (针对迷雾 & 状态变更)
+    private refreshMapViews(): void {
+        for (let i = 0; i < this._nodes.length; i++) {
+            const n = this._nodes[i];
+            const g = this._nodeGraphics[i];
+            const lbl = this._nodeOwnerLabels[i];
+            if (!g || !lbl) continue;
+
+            const visible = FogSystem.isNodeExplored(n.id, OwnerType.PLAYER);
+
+            if (visible) {
+                const color = this.getOwnerColor(n.ownerId);
+                g.fillColor = color;
+                lbl.string = FogSystem.isNodeCurrentlyVisible(n.id, OwnerType.PLAYER)
+                    ? `${n.garrisonCount}` : `?`;
+            } else {
+                g.fillColor = new Color(60, 60, 60);
+                lbl.string = '';
+            }
+        }
+    }
+
+    // 每帧刷新军队视图：新生军队创建视图，消亡军队销毁视图
+    private refreshArmyViews(): void {
+        // 移除不存在的军队视图
+        const aliveIds = new Set(this._armies.map(a => a.id));
+        for (const [id, vn] of this._armyViewNodes.entries()) {
+            if (!aliveIds.has(id)) {
+                vn.destroy();
+                this._armyViewNodes.delete(id);
+            }
+        }
+
+        // 为新生军队创建视图并每帧更新位置
+        for (const a of this._armies) {
+            let vn = this._armyViewNodes.get(a.id);
+            if (!vn) {
+                vn = this.createArmyGraphic(a);
+                this._armyViewNodes.set(a.id, vn);
+            }
+            this.updateArmyPosition(vn, a);
+        }
+    }
+
+    // 创建一支军队视图节点
+    private createArmyGraphic(army: ArmyEntity): Node {
+        const vn = new Node(`Army_${army.id}`);
+        const g = vn.addComponent(Graphics);
+        const color = this.getOwnerColor(army.ownerId);
+        g.fillColor = color;
+        g.strokeColor = new Color(30, 30, 30);
+        g.lineWidth = 1;
+        g.circle(0, 0, 8);
+        g.fill();
+        g.stroke();
+
+        // 人数标签
+        const lblNode = new Node('Label');
+        lblNode.setPosition(0, -14, 0);
+        const lbl = lblNode.addComponent(Label);
+        lbl.string = `${army.soldierCount}`;
+        lbl.fontSize = 12;
+        lbl.color = Color.WHITE;
+        lbl.node.getComponent(UITransform)!.setContentSize(50, 18);
+        vn.addChild(lblNode);
+
+        this._mapLayer!.addChild(vn);
+        return vn;
+    }
+
+    // 计算军队在边上的位置
+    private updateArmyPosition(vn: Node, army: ArmyEntity): void {
+        if (army.currentEdgeIndex >= army.pathNodeIds.length - 1) return;
+        const nodeA = this._nodes[army.pathNodeIds[army.currentEdgeIndex]];
+        const nodeB = this._nodes[army.pathNodeIds[army.currentEdgeIndex + 1]];
+        if (!nodeA || !nodeB) return;
+        const t = army.progress;
+        vn.setPosition(
+            nodeA.position.x + (nodeB.position.x - nodeA.position.x) * t,
+            nodeA.position.y + (nodeB.position.y - nodeA.position.y) * t,
+            0,
+        );
+    }
+
+    // 获取 ownerId 对应的显示颜色
+    private getOwnerColor(ownerId: string): Color {
+        if (ownerId === OwnerType.NEUTRAL)  return GameManager.OWNER_COLORS[OwnerType.NEUTRAL];
+        if (ownerId === OwnerType.PLAYER)   return GameManager.OWNER_COLORS[OwnerType.PLAYER];
+        if (GameManager.OWNER_COLORS[ownerId]) return GameManager.OWNER_COLORS[ownerId];
+        // AI: 用 aiId 对应的索引取颜色
+        const aiIdx = this._aiIds.indexOf(ownerId);
+        if (aiIdx >= 0 && aiIdx < GameManager.AI_COLORS.length) {
+            return GameManager.AI_COLORS[aiIdx];
+        }
+        return new Color(200, 60, 60);
     }
 }

@@ -77,7 +77,7 @@ export class SceneBuilder extends Component {
             if (canvas.getChildByName('Title')) return;
             this.buildLobby(canvas);
         } else {
-            if (canvas.getChildByName('HUD')) return;
+            if (canvas.getChildByName('GameOverUI')) return;
             this.buildGame(canvas);
         }
     }
