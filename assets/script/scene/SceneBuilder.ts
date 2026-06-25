@@ -1,5 +1,5 @@
 import {
-    _decorator, Component, Node, Canvas, UITransform, Label, Button, Slider,
+    _decorator, Component, Node, Canvas, UITransform, Label, Button,
     EventHandler, Enum,
 } from 'cc';
 import { LobbyUI } from '../ui/LobbyUI';
@@ -39,19 +39,14 @@ function makeLabel(parent: Node, name: string, text: string, x = 0, y = 0, w = 2
     return l;
 }
 // 新建一个 Button 节点，挂载 Button 组件，并在其下新建一个 Label 节点作为按钮文本
-function makeBtn(parent: Node, name: string, text: string, x = 0, y = 0, w = 160, h = 46): { btn: Button; label: Label; node: Node } {
+function makeBtn(parent: Node, name: string, text: string, x = 0, y = 0, w = 160, h = 46, fontSize = 20): { btn: Button; label: Label; node: Node } {
     const node = make(parent, name, x, y, w, h);
     const btn = node.addComponent(Button);
     const child = make(node, name + '_Lbl', 0, 0, w, h);
     const lbl = child.addComponent(Label);
     lbl.string = text;
+    lbl.fontSize = fontSize;
     return { btn, label: lbl, node };
-}
-
-// 新建一个 Slider 节点，挂载 Slider 组件，并设置位置和大小
-function makeSlider(parent: Node, name: string, x = 0, y = 0, w = 240): { slider: Slider; node: Node } {
-    const node = make(parent, name, x, y, w, 30);
-    return { slider: node.addComponent(Slider), node };
 }
 // 将按钮点击事件绑定到指定组件的指定方法上
 // 入参：btn - 按钮组件，target - 目标节点，comp - 组件名，handler - 方法名
@@ -173,15 +168,15 @@ export class SceneBuilder extends Component {
 
     private buildGame(canvas: Node): void {
         // -- HUD --
-        const hud = make(canvas, 'HUD', 0, 300, 900, 56);
-        makeLabel(hud, 'H_Gold', '金币: 0', -380, 0, 160, 36, 22);
-        makeLabel(hud, 'H_Time', '00:00', -220, 0, 100, 36, 22);
-        makeLabel(hud, 'H_Speed', '1x', -120, 0, 70, 36, 22);
-        const albl = makeLabel(hud, 'H_Alliance', '', 0, 0, 200, 36, 18);
+        const hud = make(canvas, 'HUD', 0, 280, 900, 56);
+        makeLabel(hud, 'H_Gold', '金币: 0', -380, 0, 160, 36, 20);
+        makeLabel(hud, 'H_Time', '00:00', -220, 0, 100, 36, 20);
+        makeLabel(hud, 'H_Speed', '1x', -120, 0, 70, 36, 20);
+        const albl = makeLabel(hud, 'H_Alliance', '', 0, 0, 200, 36, 20);
         albl.node.active = false;
-        const pause  = makeBtn(hud, 'H_Pause', '⏸', 180, 0, 70, 44);
-        const spPrev = makeBtn(hud, 'H_Sprev', '←', 250, 0, 50, 44);
-        const spNext = makeBtn(hud, 'H_Snext', '→', 300, 0, 50, 44);
+        const pause  = makeBtn(hud, 'H_Pause', '⏸', 0, 0, 70, 44);
+        const spPrev = makeBtn(hud, 'H_Sprev', '←', 160, 0, 50, 44);
+        const spNext = makeBtn(hud, 'H_Snext', '→', 200, 0, 50, 44);
 
         const hudC = hud.addComponent(HUDController);
         hudC.goldLabel     = hud.getChildByName('H_Gold')!.getComponent(Label);
@@ -212,8 +207,8 @@ export class SceneBuilder extends Component {
 
         // -- GameOverUI --
         const goNode = make(canvas, 'GameOverUI', 0, 0, 440, 300);
-        makeLabel(goNode, 'GO_Title', '胜利！', 0, 80, 300, 50, 40);
-        makeLabel(goNode, 'GO_Stats', '', 0, 20, 400, 32, 22);
+        makeLabel(goNode, 'GO_Title', '胜利！', 0, 80, 300, 50, 20);
+        makeLabel(goNode, 'GO_Stats', '', 0, 20, 400, 32, 20);
         makeLabel(goNode, 'GO_Reward', '', 0, -20, 400, 32, 20);
         const reBtn = makeBtn(goNode, 'GO_Restart', '重新开始', -110, -80, 160, 50);
         const loBtn = makeBtn(goNode, 'GO_Lobby', '返回大厅', 110, -80, 160, 50);
@@ -228,9 +223,9 @@ export class SceneBuilder extends Component {
         goNode.active = false;
 
         // -- EdgePanel --
-        const epNode = make(canvas, 'EdgePanel', 460, 0, 300, 280);
-        makeLabel(epNode, 'EP_Title', '线路 #', -110, 90, 280, 36, 24);
-        makeLabel(epNode, 'EP_Info', '', -110, 30, 280, 30, 18);
+        const epNode = make(canvas, 'EdgePanel', 310, 0, 300, 280);
+        makeLabel(epNode, 'EP_Title', '线路 #', -110, 90, 280, 36, 20);
+        makeLabel(epNode, 'EP_Info', '', -110, 30, 280, 36, 20);
         const upgBtn = makeBtn(epNode, 'EP_Upgrade', '升级→2级(50金)', -40, -30, 180, 46);
         const epClose = makeBtn(epNode, 'EP_Close', '关闭', 0, -90, 100, 44);
         const ep = epNode.addComponent(EdgePanel);
@@ -244,11 +239,11 @@ export class SceneBuilder extends Component {
         epNode.active = false;
 
         // -- ArmyPanel --
-        const apNode = make(canvas, 'ArmyPanel', 460, 0, 300, 300);
-        makeLabel(apNode, 'AP_Title', '军队 #', -110, 100, 280, 36, 24);
-        makeLabel(apNode, 'AP_Info', '', -110, 50, 280, 30, 18);
-        makeLabel(apNode, 'AP_Progress', '', -110, 10, 280, 30, 18);
-        makeLabel(apNode, 'AP_Path', '', -110, -30, 280, 30, 16);
+        const apNode = make(canvas, 'ArmyPanel', 310, 0, 300, 300);
+        makeLabel(apNode, 'AP_Title', '军队 #', -110, 100, 280, 36, 20);
+        makeLabel(apNode, 'AP_Info', '', -110, 50, 280, 36, 20);
+        makeLabel(apNode, 'AP_Progress', '', -110, 10, 280, 36, 20);
+        makeLabel(apNode, 'AP_Path', '', -110, -30, 280, 36, 20);
         const apClose = makeBtn(apNode, 'AP_Close', '关闭', 0, -90, 100, 44);
         const ap = apNode.addComponent(ArmyPanel);
         ap.titleLabel    = apNode.getChildByName('AP_Title')!.getComponent(Label);
@@ -271,36 +266,26 @@ export class SceneBuilder extends Component {
 
     // --- NodePanel 子节点 ---
     private buildNodePanel(p: Node): void {
+        const rowH = 36;
         let y = 270;
-        makeLabel(p, 'N_Title', '节点 #', -110, y, 280, 36, 24);
-        y -= 38;
-        makeLabel(p, 'N_Info', '', -110, y, 280, 26, 18);
-        y -= 32;
-        makeLabel(p, 'N_Garrison', '驻军：0', -110, y, 280, 26, 18);
-        y -= 32;
-        makeLabel(p, 'N_Build', '空闲', -110, y, 280, 26, 18);
-        y -= 32;
-        makeLabel(p, 'N_Recruit', '征兵队列：空', -110, y, 280, 26, 16);
-        y -= 46;
-        makeBtn(p, 'N_Upgrade', '升级', -80, y, 100, 42);
-        makeBtn(p, 'N_CvtFort', '转要塞', 50, y, 100, 42);
-        makeBtn(p, 'N_CvtMarket', '转市场', 180, y, 100, 42);
-        y -= 52;
-        makeBtn(p, 'N_RecruitB', '征兵 100金', 0, y, 140, 42);
-        y -= 52;
-        makeSlider(p, 'N_Slider', 0, y, 260);
-        makeLabel(p, 'N_TroopCnt', '0 兵', 0, y - 30, 100, 26, 16);
-        y -= 54;
-        makeBtn(p, 'N_Send', '派兵', 0, y, 120, 42);
-        y -= 54;
-        makeBtn(p, 'N_AutoRct', '自动征兵：关', 0, y, 180, 42);
-        y -= 54;
-        makeBtn(p, 'N_BatchAll', '批量升级全部', -80, y, 150, 42);
-        makeBtn(p, 'N_BatchFort', '批量升级要塞', 80, y, 150, 42);
-        y -= 46;
-        makeBtn(p, 'N_BatchMarket', '批量升级市场', 0, y, 150, 42);
-        y -= 48;
-        makeBtn(p, 'N_Close', '关闭', 0, y, 80, 38);
+        makeLabel(p, 'N_Title', '节点 #', 0, y, 240, rowH, 24);                y -= rowH + 4;
+        makeLabel(p, 'N_Info', '', 0, y, 240, rowH, 24);                       y -= rowH + 4;
+        makeLabel(p, 'N_Garrison', '驻军：0', 0, y, 240, rowH, 24);            y -= rowH + 4;
+        makeLabel(p, 'N_Build', '空闲', 0, y, 240, rowH, 24);                  y -= rowH + 4;
+        makeLabel(p, 'N_Recruit', '征兵队列：空', 0, y, 240, rowH, 24);        y -= rowH + 8;
+        makeBtn(p, 'N_Upgrade', '升级', 0, y, 180, rowH, 24);                      y -= rowH + 8;
+        makeBtn(p, 'N_CvtFort', '转要塞', 0, y, 180, rowH, 24);                    y -= rowH + 8;
+        makeBtn(p, 'N_CvtMarket', '转市场', 0, y, 180, rowH, 24);                  y -= rowH + 8;
+        makeBtn(p, 'N_RecruitB', '征兵 100金', 0, y, 180, rowH, 24);              y -= rowH + 8;
+        makeBtn(p, 'N_TroopPrev', '-', -100, y, 60, rowH, 24);
+        makeLabel(p, 'N_TroopCnt', '0 兵', 0, y, 80, rowH, 24);
+        makeBtn(p, 'N_TroopNext', '+', 100, y, 60, rowH, 24);                     y -= rowH + 8;
+        makeBtn(p, 'N_Send', '派兵', 0, y, 180, rowH, 24);                         y -= rowH + 8;
+        makeBtn(p, 'N_AutoRct', '自动征兵：关', 0, y, 180, rowH, 24);              y -= rowH + 8;
+        makeBtn(p, 'N_BatchAll', '批量升级全部', 0, y, 180, rowH, 24);             y -= rowH + 8;
+        makeBtn(p, 'N_BatchFort', '批量升级要塞', 0, y, 180, rowH, 24);            y -= rowH + 8;
+        makeBtn(p, 'N_BatchMarket', '批量升级市场', 0, y, 180, rowH, 24);          y -= rowH + 8;
+        makeBtn(p, 'N_Close', '关闭', 0, y, 180, rowH, 24);
     }
     // ======================== NodePanel 绑定 ========================
     private wireNodePanel(np: NodePanel, p: Node): void {
@@ -316,8 +301,9 @@ export class SceneBuilder extends Component {
         np.convertToMarketBtn     = g('N_CvtMarket')?.getComponent(Button) ?? null;
         np.recruitBtn             = g('N_RecruitB')?.getComponent(Button) ?? null;
         np.recruitBtnLabel        = g('N_RecruitB')?.getChildByName('N_RecruitB_Lbl')?.getComponent(Label) ?? null;
-        np.troopSlider            = g('N_Slider')?.getComponent(Slider) ?? null;
+        np.troopPrevBtn           = g('N_TroopPrev')?.getComponent(Button) ?? null;
         np.troopCountLabel        = g('N_TroopCnt')?.getComponent(Label) ?? null;
+        np.troopNextBtn           = g('N_TroopNext')?.getComponent(Button) ?? null;
         np.sendTroopsBtn          = g('N_Send')?.getComponent(Button) ?? null;
         np.closeBtn               = g('N_Close')?.getComponent(Button) ?? null;
         np.autoRecruitToggleBtn   = g('N_AutoRct')?.getComponent(Button) ?? null;
@@ -330,6 +316,8 @@ export class SceneBuilder extends Component {
         bindClick(np.convertToFortressBtn!, p, 'NodePanel', 'onConvertToFortressClicked');
         bindClick(np.convertToMarketBtn!, p, 'NodePanel', 'onConvertToMarketClicked');
         bindClick(np.recruitBtn!, p, 'NodePanel', 'onRecruitClicked');
+        bindClick(np.troopPrevBtn!, p, 'NodePanel', 'onTroopPrevClicked');
+        bindClick(np.troopNextBtn!, p, 'NodePanel', 'onTroopNextClicked');
         bindClick(np.sendTroopsBtn!, p, 'NodePanel', 'onSendTroopsClicked');
         bindClick(np.closeBtn!, p, 'NodePanel', 'onCloseClicked');
         bindClick(np.autoRecruitToggleBtn!, p, 'NodePanel', 'onAutoRecruitToggleClicked');
