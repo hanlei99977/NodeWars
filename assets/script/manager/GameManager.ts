@@ -1,4 +1,4 @@
-import { _decorator, Component, director, Node, Graphics, Color, Label, UITransform, EventTouch, EventMouse, Vec2, Input, input, Camera, view } from 'cc';
+import { _decorator, Component, director, Node, Graphics, Color, Label, UITransform, EventTouch, Vec2 } from 'cc';
 import { NodeEntity } from '../entity/NodeEntity';
 import { EdgeEntity } from '../entity/EdgeEntity';
 import { ArmyEntity } from '../entity/ArmyEntity';
@@ -53,7 +53,6 @@ export class GameManager extends Component {
     // --- Map Layer ---
     private _mapLayer: Node | null = null;
     private _dragSurface: Node | null = null;
-    private _cam: Camera | null = null;
     private _nodeGraphics: (Graphics | null)[] = [];
     private _nodeOwnerLabels: (Label | null)[] = [];
     private _edgeNodes: Map<number, Node> = new Map();
@@ -61,7 +60,6 @@ export class GameManager extends Component {
     private _dragLastPos: Vec2 | null = null;
     private _isDragging = false;
     private _mapBounds = { minX: 0, maxX: 0, minY: 0, maxY: 0 };
-    private _canvasSize = { w: 960, h: 640 };
 
     private static readonly NODE_RADIUS = 18;// 节点半径
     private static readonly OWNER_COLORS: Record<string, Color> = {
@@ -442,22 +440,11 @@ export class GameManager extends Component {
 
     // ==================== 地图视图 ====================
 
-    // 生成整张地图的视觉表示 + 摄像机绑定
+    // 生成整张地图的视觉表示；MapLayer 负责承载地图内容，拖拽与缩放只影响它
     private renderMap(): void {
         this.clearMap();
 
-        // 查找 Camera（Canvas 节点自带）
-        this._cam = this.node.getComponent(Camera)
-            ?? director.getScene()?.getComponentInChildren(Camera) ?? null;
-
-        // 获取 Canvas 尺寸
-        const ui = this.node.getComponent(UITransform);
-        if (ui) {
-            this._canvasSize.w = ui.width;
-            this._canvasSize.h = ui.height;
-        }
-
-        // 计算节点包围盒（原始坐标）并存储
+        // 计算节点包围盒
         let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
         for (const n of this._nodes) {
             if (n.position.x < minX) minX = n.position.x;
@@ -468,12 +455,6 @@ export class GameManager extends Component {
         const cx = (minX + maxX) / 2;
         const cy = (minY + maxY) / 2;
 
-        // MapLayer 固定居中（不再随拖拽移动）
-        this._mapLayer = new Node('MapLayer');
-        this._mapLayer.setPosition(-cx, -cy, 0);
-        this.node.addChild(this._mapLayer);
-
-        // 存储居中的地图范围（MapLayer 坐标系内）
         this._mapBounds = {
             minX: minX - cx,
             maxX: maxX - cx,
@@ -481,7 +462,7 @@ export class GameManager extends Component {
             maxY: maxY - cy,
         };
 
-        // 半透明拖拽区
+        // 拖拽感知层（最下层，只捕获地图空白区的触摸）
         this._dragSurface = new Node('DragSurface');
         const dsUi = this._dragSurface.addComponent(UITransform);
         dsUi.setContentSize(2000, 2000);
@@ -493,26 +474,26 @@ export class GameManager extends Component {
             this._dragLastPos = e.getUILocation();
         });
         this._dragSurface.on(Node.EventType.TOUCH_MOVE, (e: EventTouch) => {
-            if (!this._isDragging || !this._dragLastPos || !this._cam) return;
+            if (!this._isDragging || !this._dragLastPos || !this._mapLayer) return;
             const cur = e.getUILocation();
-            const dx = (cur.x - this._dragLastPos.x);
-            const dy = (cur.y - this._dragLastPos.y);
+            const dx = cur.x - this._dragLastPos.x;
+            const dy = cur.y - this._dragLastPos.y;
             this._dragLastPos.set(cur.x, cur.y);
-            // 摄像机反向平移（拖拽方向 → 摄像机朝相反方向移动）
-            this._applyCameraPan(dx, dy);
+            const s = this._mapLayer.scale.x;
+            const p = this._mapLayer.position;
+            this._mapLayer.setPosition(p.x + dx / s, p.y + dy / s, p.z);
+            this._clampMapLayer();
         });
         this._dragSurface.on(Node.EventType.TOUCH_END, () => {
             this._isDragging = false;
             this._dragLastPos = null;
         });
 
-        // 滚轮缩放
-        input.on(Input.EventType.MOUSE_WHEEL, this._onZoom, this);
+        // MapLayer（在上层，包含地图节点/边/军队）
+        this._mapLayer = new Node('MapLayer');
+        this._mapLayer.setPosition(-cx, -cy, 0);
+        this.node.addChild(this._mapLayer);
 
-        // 重置摄像机到初始状态
-        this._resetCamera();
-
-        // 画边、画节点
         for (const edge of this._edges) {
             this.createEdgeGraphic(edge);
         }
@@ -525,50 +506,17 @@ export class GameManager extends Component {
         }
     }
 
-    // 重置摄像机到地图中心
-    private _resetCamera(): void {
-        if (!this._cam) return;
-        const camNode = this._cam.node;
-        camNode.setPosition(0, 0, 0);
-        camNode.setScale(1, 1, 1);
-    }
-
-    // 摄像机平移（dx/dy 为鼠标拖拽增量，摄像机朝相反方向移动）
-    private _applyCameraPan(dx: number, dy: number): void {
-        if (!this._cam) return;
-        const camNode = this._cam.node;
-        const pos = camNode.position;
-        // 考虑摄像机缩放比例：缩小时拖动快，放大时拖动慢
-        const s = camNode.scale.x;
-        camNode.setPosition(pos.x - dx / s, pos.y - dy / s, pos.z);
-        this._clampCameraPos();
-    }
-
-    // 限制摄像机不超出地图范围
-    private _clampCameraPos(): void {
-        if (!this._cam) return;
-        const camNode = this._cam.node;
-        const s = camNode.scale.x;
-        const halfW = this._canvasSize.w / 2 / s;
-        const halfH = this._canvasSize.h / 2 / s;
-        const b = this._mapBounds;
+    // MapLayer 边界限制
+    private _clampMapLayer(): void {
+        if (!this._mapLayer) return;
+        const ml = this._mapLayer;
+        const s = ml.scale.x;
+        // 留少许 margin 让地图不全贴边
         const margin = 100;
-
-        const pos = camNode.position;
-        const nx = Math.max(b.minX - halfW - margin, Math.min(b.maxX + halfW + margin, pos.x));
-        const ny = Math.max(b.minY - halfH - margin, Math.min(b.maxY + halfH + margin, pos.y));
-        camNode.setPosition(nx, ny, pos.z);
-    }
-
-    // 滚轮缩放：摄像机 scale 变化（Z 轴等价：scale 越大=视野越近）
-    private _onZoom(e: EventMouse): void {
-        if (!this._cam) return;
-        const delta = e.getScrollY() * -0.1;
-        const camNode = this._cam.node;
-        const s = camNode.scale.x;
-        const ns = Math.max(0.3, Math.min(3.0, s + delta));
-        camNode.setScale(ns, ns, 1);
-        this._clampCameraPos();
+        const p = ml.position;
+        const nx = Math.max(this._mapBounds.minX - margin, Math.min(this._mapBounds.maxX + margin, p.x));
+        const ny = Math.max(this._mapBounds.minY - margin, Math.min(this._mapBounds.maxY + margin, p.y));
+        ml.setPosition(nx, ny, p.z);
     }
 
     // 清除旧地图
@@ -585,7 +533,6 @@ export class GameManager extends Component {
             this._dragSurface.destroy();
             this._dragSurface = null;
         }
-        input.off(Input.EventType.MOUSE_WHEEL, this._onZoom, this);
         this._nodeGraphics = [];
         this._nodeOwnerLabels = [];
         this._isDragging = false;
