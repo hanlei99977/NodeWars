@@ -2,7 +2,7 @@ import { _decorator, Component, director, Node, Graphics, Color, Label, UITransf
 import { NodeEntity } from '../entity/NodeEntity';
 import { EdgeEntity } from '../entity/EdgeEntity';
 import { ArmyEntity } from '../entity/ArmyEntity';
-import { GameState, MapSize, Difficulty, FogMode, GameSpeed, OwnerType, ArmyEventType, EconomyEventType, NodeBattleOutcome, AIAllianceState, NodeType } from '../config/EnumDefine';
+import { GameState, MapSize, Difficulty, FogMode, GameSpeed, OwnerType, ArmyState, ArmyEventType, EconomyEventType, NodeBattleOutcome, AIAllianceState, NodeType } from '../config/EnumDefine';
 import { GameConfig } from '../config/GameConfig';
 import { MapGenerator, MapGenerateResult } from '../map/MapGenerator';
 import { ArmyManager } from '../manager/ArmyManager';
@@ -60,6 +60,8 @@ export class GameManager extends Component {
     private _dragLastPos: Vec2 | null = null;
     private _isDragging = false;
     private _mapBounds = { minX: 0, maxX: 0, minY: 0, maxY: 0 };
+    private _pendingSendTroops: { nodeId: number; count: number } | null = null;
+    private _pendingArmyRedirect: { armyId: number } | null = null;
 
     private static readonly NODE_RADIUS = 18;// 节点半径
     private static readonly OWNER_COLORS: Record<string, Color> = {
@@ -472,6 +474,10 @@ export class GameManager extends Component {
         this._dragSurface.setSiblingIndex(0);
 
         this._dragSurface.on(Node.EventType.TOUCH_START, (e: EventTouch) => {
+            if (this._pendingSendTroops || this._pendingArmyRedirect) {
+                this._cancelPendingModes();
+                return;
+            }
             this._isDragging = true;
             this._dragLastPos = e.getUILocation();
         });
@@ -627,8 +633,25 @@ export class GameManager extends Component {
         this._mapLayer!.addChild(wrapper);
     }
 
-    // 点击某个节点 → 弹出 NodePanel 并绑定数据
+    // 点击某个节点 → 弹出 NodePanel 并绑定数据, 或处理待派兵/改道
     private onNodeClicked(nodeId: number, _e: EventTouch): void {
+        // 处理待派兵：以点击节点为目标出兵
+        if (this._pendingSendTroops) {
+            const p = this._pendingSendTroops;
+            this._cancelPendingModes();
+            if (p.nodeId === nodeId) return;
+            this._dispatchTroops(p.nodeId, p.count, nodeId);
+            return;
+        }
+
+        // 处理待改道：以点击节点为目标改道
+        if (this._pendingArmyRedirect) {
+            const p = this._pendingArmyRedirect;
+            this._cancelPendingModes();
+            this._redirectArmy(p.armyId, nodeId);
+            return;
+        }
+
         if (!this.nodePanel) return;
         const node = this._nodes[nodeId];
         if (!node) return;
@@ -667,20 +690,9 @@ export class GameManager extends Component {
             const srcNode = this._nodes[id];
             if (count <= 0 || count > srcNode.garrisonCount) return;
 
-            const neighbors = ArmyManager.adjList[id] || [];
-            let target = neighbors.find(nid => this._nodes[nid] && this._nodes[nid].ownerId !== OwnerType.PLAYER);
-            if (target === undefined) target = neighbors[0];
-            if (target === undefined) return;
-
-            console.log(`[GameManager] 派兵: 节点#${id} → #${target}, 数量=${count}`);
-            srcNode.garrisonCount -= count;
-            const path = ArmyManager.findPath(id, target);
-            if (path && path.length >= 2) {
-                ArmyManager.createArmy(OwnerType.PLAYER, count, path);
-            } else {
-                srcNode.garrisonCount += count;
-            }
-            refreshAfter();
+            console.log(`[GameManager] 待派兵: 节点#${id}, 数量=${count} — 点击目标节点`);
+            this._pendingSendTroops = { nodeId: id, count };
+            if (this.nodePanel) this.nodePanel.node.active = false;
         };
 
         this.nodePanel.onClose = () => { if (this.nodePanel) this.nodePanel.node.active = false; };
@@ -830,11 +842,17 @@ export class GameManager extends Component {
         };
     }
 
-    // 点击军队 → ArmyPanel
+    // 点击军队 → ArmyPanel 或进入改道模式
     private onArmyClicked(armyId: number): void {
         if (!this.armyPanel) return;
         const army = this._armies.find(a => a.id === armyId);
         if (!army) return;
+
+        if (army.ownerId === OwnerType.PLAYER && army.state === ArmyState.MOVING) {
+            console.log(`[GameManager] 待改道: 军队#${armyId} — 点击目标节点`);
+            this._pendingArmyRedirect = { armyId };
+            //return;
+        }
 
         this.armyPanel.bindToEntity(army);
         this.armyPanel.node.active = true;
@@ -842,5 +860,44 @@ export class GameManager extends Component {
         this.armyPanel.onClose = () => {
             if (this.armyPanel) this.armyPanel.node.active = false;
         };
+    }
+
+    private _cancelPendingModes(): void {
+        if (this._pendingSendTroops) {
+            console.log(`[GameManager] 取消派兵`);
+            this._pendingSendTroops = null;
+        }
+        if (this._pendingArmyRedirect) {
+            console.log(`[GameManager] 取消改道`);
+            this._pendingArmyRedirect = null;
+        }
+    }
+
+    private _dispatchTroops(srcNodeId: number, count: number, targetNodeId: number): void {
+        const srcNode = this._nodes[srcNodeId];
+        if (!srcNode || count <= 0 || count > srcNode.garrisonCount) return;
+
+        const path = ArmyManager.findPath(srcNodeId, targetNodeId);
+        if (!path || path.length < 2) {
+            console.log(`[GameManager] 派兵失败: 节点#${srcNodeId} → #${targetNodeId} 无路径`);
+            return;
+        }
+
+        console.log(`[GameManager] 派兵: 节点#${srcNodeId} → #${targetNodeId}, 数量=${count}, 路径=${path.join('→')}`);
+        srcNode.garrisonCount -= count;
+        ArmyManager.createArmy(OwnerType.PLAYER, count, path);
+        this.refreshMapViews();
+    }
+
+    private _redirectArmy(armyId: number, targetNodeId: number): void {
+        const army = this._armies.find(a => a.id === armyId);
+        if (!army) return;
+
+        const success = ArmyManager.setReroute(armyId, targetNodeId);
+        if (success) {
+            console.log(`[GameManager] 改道: 军队#${armyId}, 新目标#${targetNodeId}`);
+        } else {
+            console.log(`[GameManager] 改道失败: 军队#${armyId} → #${targetNodeId}`);
+        }
     }
 }
