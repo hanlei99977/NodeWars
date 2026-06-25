@@ -76,6 +76,7 @@ export class ArmyManager {
         for (const army of ArmyManager._armies) {
             // 军队不在移动状态或士兵数为0，标记移除
             if (army.state !== ArmyState.MOVING || army.soldierCount <= 0) {
+                console.log(`[ArmyManager] 军队#${army.id} 状态异常（state=${army.state}, soldiers=${army.soldierCount}），移除`);
                 toRemove.push(army.id);
                 continue;
             }
@@ -83,6 +84,8 @@ export class ArmyManager {
             // 查找当前所在边
             const edge = ArmyManager.findEdge(army.currentNodeId, army.nextNodeId);
             if (!edge) {
+                console.warn(`[ArmyManager] 军队#${army.id} 所在边不存在（${army.currentNodeId} -> ${army.nextNodeId}），移除`);
+                console.log(`progress ${army.progress}`)
                 toRemove.push(army.id);
                 continue;
             }
@@ -93,12 +96,13 @@ export class ArmyManager {
 
             // 推进进度
             army.progress += (currentSpeed * dt) / edge.length;
+            console.log(`progress ${army.progress}`)
             // 进度超过1表示到达边终点
             if (army.progress >= 1) {
                 army.progress = 1;
 
                 if (army.hasMoreEdges) {
-                    
+                    console.log(`[ArmyManager] 军队#${army.id} 到达边终点节点#${army.nextNodeId}，准备进入下一条边`);
                     // 进入下一条边
                     army.currentEdgeIndex++;
                     army.progress = 0; // 进入下一条边，重置进度
@@ -112,6 +116,7 @@ export class ArmyManager {
 
             if (army.hasArrived) {
                 // 到达最终终点
+                console.log(`[ArmyManager] 军队#${army.id} 到达最终终点节点#${army.destinationNodeId}`);
                 events.push(ArmyManager.makeEvent(ArmyEventType.ARRIVED_AT_NODE, army, army.destinationNodeId));
                 toRemove.push(army.id);
             }
@@ -119,6 +124,7 @@ export class ArmyManager {
 
         // 清理已到达/覆灭的军队
         for (const id of toRemove) {
+            console.log(`[ArmyManager] 移除军队#${id}`);
             ArmyManager.removeArmy(id);
         }
 

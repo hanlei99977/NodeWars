@@ -243,6 +243,7 @@ export class GameManager extends Component {
 
         // 处理行军事件
         for (const event of armyEvents) {
+            console.log(`[GameManager] 行军事件: type=${event.type}, armyId=${event.army.id}, nodeId=${event.nodeId}, otherArmyId=${event.otherArmy?.id}`);
             if (event.type === ArmyEventType.ARRIVED_AT_NODE && event.nodeId !== undefined) {
                 this.handleArmyArrival(event.army, event.nodeId);
             } else if (event.type === ArmyEventType.EDGE_ENCOUNTER && event.otherArmy) {
@@ -301,7 +302,7 @@ export class GameManager extends Component {
     private handleArmyArrival(army: ArmyEntity, nodeId: number): void {
         const node = this._nodes[nodeId];
         if (!node) return;
-
+        console.log(`[GameManager] 军队#${army.id} 到达节点#${nodeId} (owner=${node.ownerId}, garrison=${node.garrisonCount})`);
         const result = NodeBattleSystem.resolve(army, node);
 
         if (result.outcome === NodeBattleOutcome.ATTACKER_WINS) {

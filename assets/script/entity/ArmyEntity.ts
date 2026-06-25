@@ -47,7 +47,7 @@ export class ArmyEntity {
 
     // 是否已到达路径最终终点
     get hasArrived(): boolean {
-        return this.currentEdgeIndex >= this.pathNodeIds.length - 1 && this.progress >= 1;
+        return this.currentEdgeIndex >= this.pathNodeIds.length - 1;
     }
 
     // 路径终点节点ID
