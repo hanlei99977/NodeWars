@@ -5,6 +5,8 @@ import {
 import { LobbyUI } from '../ui/LobbyUI';
 import { HUDController } from '../ui/HUDController';
 import { NodePanel } from '../ui/NodePanel';
+import { EdgePanel } from '../ui/EdgePanel';
+import { ArmyPanel } from '../ui/ArmyPanel';
 import { SaveSlotsUI } from '../ui/SaveSlotsUI';
 import { GameOverUI } from '../ui/GameOverUI';
 import { GameManager } from '../manager/GameManager';
@@ -235,12 +237,46 @@ export class SceneBuilder extends Component {
         bindClick(loBtn.btn, goNode, 'GameOverUI', 'onLobbyClicked');
         goNode.active = false;
 
+        // -- EdgePanel --
+        const epNode = make(canvas, 'EdgePanel', 460, 0, 300, 280);
+        makeLabel(epNode, 'EP_Title', '线路 #', -110, 90, 280, 36, 24);
+        makeLabel(epNode, 'EP_Info', '', -110, 30, 280, 30, 18);
+        const upgBtn = makeBtn(epNode, 'EP_Upgrade', '升级→2级(50金)', -40, -30, 180, 46);
+        const epClose = makeBtn(epNode, 'EP_Close', '关闭', 0, -90, 100, 44);
+        const ep = epNode.addComponent(EdgePanel);
+        ep.titleLabel      = epNode.getChildByName('EP_Title')!.getComponent(Label);
+        ep.infoLabel       = epNode.getChildByName('EP_Info')!.getComponent(Label);
+        ep.upgradeBtn      = upgBtn.btn;
+        ep.upgradeBtnLabel = upgBtn.label;
+        ep.closeBtn        = epClose.btn;
+        bindClick(upgBtn.btn, epNode, 'EdgePanel', 'onUpgradeClicked');
+        bindClick(epClose.btn, epNode, 'EdgePanel', 'onCloseClicked');
+        epNode.active = false;
+
+        // -- ArmyPanel --
+        const apNode = make(canvas, 'ArmyPanel', 460, 0, 300, 300);
+        makeLabel(apNode, 'AP_Title', '军队 #', -110, 100, 280, 36, 24);
+        makeLabel(apNode, 'AP_Info', '', -110, 50, 280, 30, 18);
+        makeLabel(apNode, 'AP_Progress', '', -110, 10, 280, 30, 18);
+        makeLabel(apNode, 'AP_Path', '', -110, -30, 280, 30, 16);
+        const apClose = makeBtn(apNode, 'AP_Close', '关闭', 0, -90, 100, 44);
+        const ap = apNode.addComponent(ArmyPanel);
+        ap.titleLabel    = apNode.getChildByName('AP_Title')!.getComponent(Label);
+        ap.infoLabel     = apNode.getChildByName('AP_Info')!.getComponent(Label);
+        ap.progressLabel = apNode.getChildByName('AP_Progress')!.getComponent(Label);
+        ap.pathLabel     = apNode.getChildByName('AP_Path')!.getComponent(Label);
+        ap.closeBtn      = apClose.btn;
+        bindClick(apClose.btn, apNode, 'ArmyPanel', 'onCloseClicked');
+        apNode.active = false;
+
         // -- GameManager --
         const gm = canvas.addComponent(GameManager);
         gm.hud          = hudC;
         gm.saveSlotsUI  = sv;
         gm.gameOverUI   = go;
         gm.nodePanel    = np;
+        gm.edgePanel    = ep;
+        gm.armyPanel    = ap;
     }
 
     // --- NodePanel 子节点 ---
