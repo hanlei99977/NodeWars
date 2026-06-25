@@ -1,4 +1,4 @@
-import { _decorator, Component, Label, Button, Slider } from 'cc';
+import { _decorator, Component, Label, Button } from 'cc';
 import { NodeEntity } from '../entity/NodeEntity';
 import { NodeLevel, NodeType, SpecialNodeType, OwnerType, UpgradeTaskState, ConvertTaskState, RecruitTaskState } from '../config/EnumDefine';
 import { NodeConfig } from '../config/NodeConfig';
@@ -62,14 +62,17 @@ export class NodePanel extends Component {
     recruitBtnLabel: Label | null = null;       // 征兵按钮文字
 
     // --- 派兵 ---
-    @property(Slider)
-    troopSlider: Slider | null = null;          // 兵力滑块
+    @property(Button)
+    troopPrevBtn: Button | null = null;
 
     @property(Label)
-    troopCountLabel: Label | null = null;       // 当前滑块兵力数
+    troopCountLabel: Label | null = null;
 
     @property(Button)
-    sendTroopsBtn: Button | null = null;        // 确认派兵按钮
+    troopNextBtn: Button | null = null;
+
+    @property(Button)
+    sendTroopsBtn: Button | null = null;
 
     // --- 关闭 ---
     @property(Button)
@@ -96,6 +99,8 @@ export class NodePanel extends Component {
     private _entity: NodeEntity | null = null;
     private _ownerId: string = '';
     private _autoRecruitEnabled: boolean = false;
+    private _troopCount: number = 0;
+    private _maxTroops: number = 0;
 
     // 外部回调（由 GameManager 之类的外层绑定，处理实际逻辑）
     onUpgrade: ((nodeId: number) => void) | null = null;
@@ -162,31 +167,42 @@ export class NodePanel extends Component {
         // 征兵按钮
         this.refreshRecruitButton();
 
-        // 派兵滑块（progress 0~1，乘以 garrisonCount 得出实际兵力）
-        if (this.troopSlider) {
-            // 重置为0
-            this.troopSlider.progress = 0;
-            this.onTroopSliderChanged();
-        }
+        // 派兵
+        this._troopCount = 0;
+        this._maxTroops = this._entity.garrisonCount;
+        this.updateTroopLabel();
 
         // 面板显示/隐藏（玩家节点才显示操作，非玩家节点仅查看）
         const isOwnNode = this._entity.ownerId === OwnerType.PLAYER;
         this.setButtonsVisible(isOwnNode);
     }
 
-    // 滑块变化回调（玩家拖动时更新派兵数量显示）
-    onTroopSliderChanged(): void {
-        if (!this.troopSlider || !this.troopCountLabel || !this._entity) return;
-        const count = Math.round(this.troopSlider.progress * this._entity.garrisonCount);
-        this.troopCountLabel.string = `${count} 兵`;
+    // 派兵数量 -1
+    onTroopPrevClicked(): void {
+        if (this._troopCount <= 0) return;
+        this._troopCount-=10;
+        this.updateTroopLabel();
+    }
+
+    // 派兵数量 +1
+    onTroopNextClicked(): void {
+        if (this._troopCount >= this._maxTroops) return;
+        this._troopCount+=10;
+        this.updateTroopLabel();
     }
 
     // 派兵按钮点击回调
     onSendTroopsClicked(): void {
-        if (!this._entity || !this.troopSlider) return;
-        const count = Math.round(this.troopSlider.progress * this._entity.garrisonCount);
-        if (count > 0 && this.onSendTroops) {
-            this.onSendTroops(this._entity.id, count);
+        if (!this._entity) return;
+        if (this._troopCount > 0 && this.onSendTroops) {
+            this.onSendTroops(this._entity.id, this._troopCount);
+        }
+    }
+
+    // 更新派兵数量标签
+    private updateTroopLabel(): void {
+        if (this.troopCountLabel) {
+            this.troopCountLabel.string = `${this._troopCount} 兵`;
         }
     }
 
@@ -293,7 +309,7 @@ export class NodePanel extends Component {
     private setButtonsVisible(visible: boolean): void {
         const btns = [
             this.upgradeBtn, this.convertToFortressBtn, this.convertToMarketBtn,
-            this.recruitBtn, this.troopSlider, this.sendTroopsBtn,
+            this.recruitBtn, this.troopPrevBtn, this.troopNextBtn, this.sendTroopsBtn,
             this.autoRecruitToggleBtn,
             this.batchUpgradeAllBtn, this.batchUpgradeFortressBtn, this.batchUpgradeMarketBtn,
         ];
