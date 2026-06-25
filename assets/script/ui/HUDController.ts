@@ -65,6 +65,7 @@ export class HUDController extends Component {
     }
 
     onPauseClicked(): void {
+        console.log(`[HUD] 暂停/继续`);
         if (this.onPauseToggle) this.onPauseToggle();
     }
 
@@ -72,6 +73,7 @@ export class HUDController extends Component {
         const speeds = [GameSpeed.X1, GameSpeed.X2, GameSpeed.X4, GameSpeed.X8];
         const idx = speeds.indexOf(this._currentSpeed);
         const next = speeds[(idx - 1 + speeds.length) % speeds.length];
+        console.log(`[HUD] 速度: ${this._currentSpeed}x → ${next}x`);
         this._currentSpeed = next;
         if (this.onSpeedChange) this.onSpeedChange(next);
         this.refreshSpeed();
@@ -81,6 +83,7 @@ export class HUDController extends Component {
         const speeds = [GameSpeed.X1, GameSpeed.X2, GameSpeed.X4, GameSpeed.X8];
         const idx = speeds.indexOf(this._currentSpeed);
         const next = speeds[(idx + 1) % speeds.length];
+        console.log(`[HUD] 速度: ${this._currentSpeed}x → ${next}x`);
         this._currentSpeed = next;
         if (this.onSpeedChange) this.onSpeedChange(next);
         this.refreshSpeed();

@@ -134,6 +134,7 @@ export class GameManager extends Component {
 
     // 公开入口：由 LobbyUI → NewGameConfig 自动触发，也可外部直接调用
     startGame(mapSize: MapSize, aiCount: number, difficulty: Difficulty, fogMode: FogMode, gameSpeed: GameSpeed): void {
+        console.log(`[GameManager] 开始游戏: mapSize=${mapSize}, aiCount=${aiCount}, difficulty=${difficulty}, fog=${fogMode}, speed=${gameSpeed}`);
         this._mapSize = mapSize;
         this._aiCount = aiCount;
         this._difficulty = difficulty;
@@ -374,6 +375,7 @@ export class GameManager extends Component {
 
     // 状态切换 + 回调通知
     private changeState(state: GameState): void {
+        console.log(`[GameManager] 状态变更: ${GameState[this._gameState]} → ${GameState[state]}`);
         this._gameState = state;
         if (this.onStateChanged) this.onStateChanged(state);
 
@@ -641,18 +643,22 @@ export class GameManager extends Component {
 
         // 绑定回调
         this.nodePanel.onUpgrade = (id) => {
+            console.log(`[GameManager] 节点升级: #${id}`);
             NodeUpgradeSystem.startUpgrade(this._nodes[id], OwnerType.PLAYER);
             refreshAfter();
         };
         this.nodePanel.onConvertToFortress = (id) => {
+            console.log(`[GameManager] 节点转要塞: #${id}`);
             NodeConvertSystem.startConvert(this._nodes[id], NodeType.FORTRESS, OwnerType.PLAYER);
             refreshAfter();
         };
         this.nodePanel.onConvertToMarket = (id) => {
+            console.log(`[GameManager] 节点转市场: #${id}`);
             NodeConvertSystem.startConvert(this._nodes[id], NodeType.MARKET, OwnerType.PLAYER);
             refreshAfter();
         };
         this.nodePanel.onRecruit = (id) => {
+            console.log(`[GameManager] 节点征兵: #${id}`);
             RecruitSystem.startRecruit(this._nodes[id], OwnerType.PLAYER);
             refreshAfter();
         };
@@ -662,11 +668,11 @@ export class GameManager extends Component {
             if (count <= 0 || count > srcNode.garrisonCount) return;
 
             const neighbors = ArmyManager.adjList[id] || [];
-            // 优先选择非己方节点作为攻击目标，其次选择顺位第一个
             let target = neighbors.find(nid => this._nodes[nid] && this._nodes[nid].ownerId !== OwnerType.PLAYER);
             if (target === undefined) target = neighbors[0];
             if (target === undefined) return;
 
+            console.log(`[GameManager] 派兵: 节点#${id} → #${target}, 数量=${count}`);
             srcNode.garrisonCount -= count;
             const path = ArmyManager.findPath(id, target);
             if (path && path.length >= 2) {
@@ -679,14 +685,17 @@ export class GameManager extends Component {
 
         this.nodePanel.onClose = () => { if (this.nodePanel) this.nodePanel.node.active = false; };
         this.nodePanel.onBatchUpgradeAll = () => {
+            console.log(`[GameManager] 批量升级全部`);
             NodeUpgradeSystem.batchUpgrade(this._nodes, 'all', OwnerType.PLAYER, ArmyManager.adjList);
             refreshAfter();
         };
         this.nodePanel.onBatchUpgradeFortress = () => {
+            console.log(`[GameManager] 批量升级要塞`);
             NodeUpgradeSystem.batchUpgrade(this._nodes, 'fortress', OwnerType.PLAYER, ArmyManager.adjList);
             refreshAfter();
         };
         this.nodePanel.onBatchUpgradeMarket = () => {
+            console.log(`[GameManager] 批量升级市场`);
             NodeUpgradeSystem.batchUpgrade(this._nodes, 'market', OwnerType.PLAYER, ArmyManager.adjList);
             refreshAfter();
         };
@@ -810,6 +819,7 @@ export class GameManager extends Component {
         this.edgePanel.node.active = true;
 
         this.edgePanel.onUpgrade = () => {
+            console.log(`[GameManager] 线路升级: #${edge.id}`);
             EdgeUpgradeSystem.upgradeEdge(edge, this._nodes, OwnerType.PLAYER);
             this.edgePanel!.refresh();
             this.refreshMapViews();

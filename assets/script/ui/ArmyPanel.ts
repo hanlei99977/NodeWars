@@ -67,6 +67,7 @@ export class ArmyPanel extends Component {
     }
 
     onCloseClicked(): void {
+        console.log(`[ArmyPanel] 关闭`);
         if (this.onClose) this.onClose();
     }
 }

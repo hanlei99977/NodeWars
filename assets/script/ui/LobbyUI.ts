@@ -106,6 +106,7 @@ export class LobbyUI extends Component {
     static readonly GAME_SCENE = 'GameScene';
 
     onLoad(): void {
+        console.log(`[LobbyUI] 大厅加载`);
         this.refreshAll();
     }
 
@@ -113,6 +114,7 @@ export class LobbyUI extends Component {
     onMapSizePrev(): void {
         this._mapSizeIndex = (this._mapSizeIndex - 1 + this._mapSizeValues.length) % this._mapSizeValues.length;
         const newSize = this._mapSizeValues[this._mapSizeIndex];
+        console.log(`[LobbyUI] 地图大小: ${newSize}`);
         const range = GameConfig.MAP_AI_RANGE[newSize];
         if (this._aiCount > range.max) this._aiCount = range.max;
         if (this._aiCount < range.min) this._aiCount = range.min;
@@ -122,6 +124,7 @@ export class LobbyUI extends Component {
     onMapSizeNext(): void {
         this._mapSizeIndex = (this._mapSizeIndex + 1) % this._mapSizeValues.length;
         const newSize = this._mapSizeValues[this._mapSizeIndex];
+        console.log(`[LobbyUI] 地图大小: ${newSize}`);
         const range = GameConfig.MAP_AI_RANGE[newSize];
         if (this._aiCount > range.max) this._aiCount = range.max;
         if (this._aiCount < range.min) this._aiCount = range.min;
@@ -132,40 +135,47 @@ export class LobbyUI extends Component {
     onAiCountPrev(): void {
         const range = GameConfig.MAP_AI_RANGE[this._mapSizeValues[this._mapSizeIndex]];
         this._aiCount = this._aiCount <= range.min ? range.max : this._aiCount - 1;
+        console.log(`[LobbyUI] AI数量: ${this._aiCount}`);
         this.refreshAiLabel();
     }
 
     onAiCountNext(): void {
         const range = GameConfig.MAP_AI_RANGE[this._mapSizeValues[this._mapSizeIndex]];
         this._aiCount = this._aiCount >= range.max ? range.min : this._aiCount + 1;
+        console.log(`[LobbyUI] AI数量: ${this._aiCount}`);
         this.refreshAiLabel();
     }
 
     // --- 难度切换 ---
     onDifficultyPrev(): void {
         this._difficultyIndex = (this._difficultyIndex - 1 + this._difficultyValues.length) % this._difficultyValues.length;
+        console.log(`[LobbyUI] 难度: ${this._difficultyValues[this._difficultyIndex]}`);
         this.refreshDifficultyLabel();
     }
 
     onDifficultyNext(): void {
         this._difficultyIndex = (this._difficultyIndex + 1) % this._difficultyValues.length;
+        console.log(`[LobbyUI] 难度: ${this._difficultyValues[this._difficultyIndex]}`);
         this.refreshDifficultyLabel();
     }
 
     // --- 迷雾切换 ---
     onFogToggle(): void {
         this._fogOn = !this._fogOn;
+        console.log(`[LobbyUI] 迷雾: ${this._fogOn ? '开' : '关'}`);
         this.refreshFogLabel();
     }
 
     // --- 游戏速度切换 ---
     onGameSpeedPrev(): void {
         this._gameSpeedIndex = (this._gameSpeedIndex - 1 + this._gameSpeedValues.length) % this._gameSpeedValues.length;
+        console.log(`[LobbyUI] 游戏速度: ${this._gameSpeedValues[this._gameSpeedIndex]}`);
         this.refreshGameSpeedLabel();
     }
 
     onGameSpeedNext(): void {
         this._gameSpeedIndex = (this._gameSpeedIndex + 1) % this._gameSpeedValues.length;
+        console.log(`[LobbyUI] 游戏速度: ${this._gameSpeedValues[this._gameSpeedIndex]}`);
         this.refreshGameSpeedLabel();
     }
 
@@ -175,13 +185,13 @@ export class LobbyUI extends Component {
         const difficulty = this._difficultyValues[this._difficultyIndex];
         const fogMode = this._fogOn ? FogMode.FOG : FogMode.NONE;
         const speed = this._gameSpeedValues[this._gameSpeedIndex] as GameSpeed;
-        // 将新游戏参数传递给 GameManager
         NewGameConfig.set(mapSize, this._aiCount, difficulty, fogMode, speed);
-        director.loadScene(LobbyUI.GAME_SCENE);// 加载游戏场景
-        console.log(`Starting new game: mapSize=${mapSize}, aiCount=${this._aiCount}, difficulty=${difficulty}, fogMode=${fogMode}, speed=${speed}`);
+        director.loadScene(LobbyUI.GAME_SCENE);
+        console.log(`[LobbyUI] 开始游戏: mapSize=${mapSize}, aiCount=${this._aiCount}, difficulty=${difficulty}, fogMode=${fogMode}, speed=${speed}`);
     }
 
     onContinueClicked(): void {
+        console.log(`[LobbyUI] 继续游戏`);
         const hasSaves = SaveSystem.getSlotList().some(s => !s.isEmpty);
         if (hasSaves) {
             director.loadScene(LobbyUI.GAME_SCENE);

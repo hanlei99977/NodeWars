@@ -47,10 +47,12 @@ export class GameOverUI extends Component {
     }
 
     onRestartClicked(): void {
+        console.log(`[GameOverUI] 重新开始`);
         if (this.onRestart) this.onRestart();
     }
 
     onLobbyClicked(): void {
+        console.log(`[GameOverUI] 返回大厅`);
         if (this.onBackToLobby) this.onBackToLobby();
     }
 }

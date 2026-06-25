@@ -179,6 +179,7 @@ export class NodePanel extends Component {
 
     // 派兵数量 -1
     onTroopPrevClicked(): void {
+        console.log(`[NodePanel] 派兵减: 当前=${this._troopCount}`);
         if (this._troopCount <= 0) return;
         this._troopCount-=10;
         this.updateTroopLabel();
@@ -186,6 +187,7 @@ export class NodePanel extends Component {
 
     // 派兵数量 +1
     onTroopNextClicked(): void {
+        console.log(`[NodePanel] 派兵加: 当前=${this._troopCount}`);
         if (this._troopCount >= this._maxTroops) return;
         this._troopCount+=10;
         this.updateTroopLabel();
@@ -193,6 +195,7 @@ export class NodePanel extends Component {
 
     // 派兵按钮点击回调
     onSendTroopsClicked(): void {
+        console.log(`[NodePanel] 派兵: 节点#${this._entity?.id} 数量=${this._troopCount}`);
         if (!this._entity) return;
         if (this._troopCount > 0 && this.onSendTroops) {
             this.onSendTroops(this._entity.id, this._troopCount);
@@ -208,6 +211,7 @@ export class NodePanel extends Component {
 
     // 升级按钮点击
     onUpgradeClicked(): void {
+        console.log(`[NodePanel] 升级: 节点#${this._entity?.id}`);
         if (this._entity && this.onUpgrade) {
             this.onUpgrade(this._entity.id);
         }
@@ -215,6 +219,7 @@ export class NodePanel extends Component {
 
     // 转为要塞
     onConvertToFortressClicked(): void {
+        console.log(`[NodePanel] 转要塞: 节点#${this._entity?.id}`);
         if (this._entity && this.onConvertToFortress) {
             this.onConvertToFortress(this._entity.id);
         }
@@ -222,6 +227,7 @@ export class NodePanel extends Component {
 
     // 转为市场
     onConvertToMarketClicked(): void {
+        console.log(`[NodePanel] 转市场: 节点#${this._entity?.id}`);
         if (this._entity && this.onConvertToMarket) {
             this.onConvertToMarket(this._entity.id);
         }
@@ -229,6 +235,7 @@ export class NodePanel extends Component {
 
     // 征兵
     onRecruitClicked(): void {
+        console.log(`[NodePanel] 征兵: 节点#${this._entity?.id}`);
         if (this._entity && this.onRecruit) {
             this.onRecruit(this._entity.id);
         }
@@ -236,26 +243,31 @@ export class NodePanel extends Component {
 
     // 关闭面板
     onCloseClicked(): void {
+        console.log(`[NodePanel] 关闭`);
         if (this.onClose) this.onClose();
     }
 
     // 批量升级所有
     onBatchUpgradeAllClicked(): void {
+        console.log(`[NodePanel] 批量升级全部`);
         if (this.onBatchUpgradeAll) this.onBatchUpgradeAll();
     }
 
     // 批量升级所有要塞
     onBatchUpgradeFortressClicked(): void {
+        console.log(`[NodePanel] 批量升级要塞`);
         if (this.onBatchUpgradeFortress) this.onBatchUpgradeFortress();
     }
 
     // 批量升级所有市场
     onBatchUpgradeMarketClicked(): void {
+        console.log(`[NodePanel] 批量升级市场`);
         if (this.onBatchUpgradeMarket) this.onBatchUpgradeMarket();
     }
 
     // 切换自动征兵
     onAutoRecruitToggleClicked(): void {
+        console.log(`[NodePanel] 自动征兵切换: ${this._autoRecruitEnabled ? '开→关' : '关→开'}`);
         this._autoRecruitEnabled = !this._autoRecruitEnabled;
         if (this.autoRecruitToggleLabel) {
             this.autoRecruitToggleLabel.string = this._autoRecruitEnabled ? '自动征兵：开' : '自动征兵：关';

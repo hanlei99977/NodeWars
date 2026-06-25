@@ -67,11 +67,13 @@ export class EdgePanel extends Component {
 
     onUpgradeClicked(): void {
         if (this._edge && this.onUpgrade) {
+            console.log(`[EdgePanel] 升级: 线路#${this._edge.id}`);
             this.onUpgrade(this._edge.id);
         }
     }
 
     onCloseClicked(): void {
+        console.log(`[EdgePanel] 关闭`);
         if (this.onClose) this.onClose();
     }
 }

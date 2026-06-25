@@ -47,7 +47,9 @@ export class NodeBattleSystem {
     static resolve(attackerArmy: ArmyEntity, targetNode: NodeEntity): NodeBattleResult {
         // 同方到达，合并驻军
         if (attackerArmy.ownerId === targetNode.ownerId) {
+            const prevGarrison = targetNode.garrisonCount;
             targetNode.garrisonCount += attackerArmy.soldierCount;
+            console.log(`[NodeBattle] 同方合并: 军队#${attackerArmy.id}(${attackerArmy.ownerId}) ${attackerArmy.soldierCount}人 → 节点#${targetNode.id}(${targetNode.ownerId}) 驻军 ${prevGarrison}→${targetNode.garrisonCount}`);
             attackerArmy.soldierCount = 0;
             attackerArmy.state = ArmyState.STATIONED;
             return new NodeBattleResult(
@@ -59,13 +61,16 @@ export class NodeBattleSystem {
             );
         }
         // 攻击方到达，进行攻占结算
+        const prevGarrison = targetNode.garrisonCount;
         const effectiveDefense = NodeBattleSystem.getEffectiveDefense(targetNode);
+        console.log(`[NodeBattle] 节点攻占: 军队#${attackerArmy.id}(${attackerArmy.ownerId}) ${attackerArmy.soldierCount}人 VS 节点#${targetNode.id}(${targetNode.ownerId}) 驻军${prevGarrison} 等效防御${effectiveDefense}`);
 
         // 攻击方兵力 > 等效防御力 时攻占成功
         if (attackerArmy.soldierCount > effectiveDefense) {
             // 攻占成功
             const remaining = attackerArmy.soldierCount - targetNode.garrisonCount;
             // 变更节点所有权
+            const prevOwner = targetNode.ownerId;
             targetNode.ownerId = attackerArmy.ownerId;
             targetNode.garrisonCount = remaining;
             // 取消进行中的升级、转换、征兵
@@ -73,6 +78,8 @@ export class NodeBattleSystem {
             // 标记攻击军队已结算
             attackerArmy.soldierCount = 0;
             attackerArmy.state = ArmyState.STATIONED;
+
+            console.log(`[NodeBattle] 攻占成功: 节点#${targetNode.id} ${prevOwner}→${targetNode.ownerId}, 剩余驻军${remaining}`);
 
             return new NodeBattleResult(
                 NodeBattleOutcome.ATTACKER_WINS,
@@ -89,6 +96,8 @@ export class NodeBattleSystem {
             targetNode.garrisonCount = Math.max(0, targetNode.garrisonCount - defenderLoss);
             attackerArmy.soldierCount = 0;
             attackerArmy.state = ArmyState.STATIONED;
+
+            console.log(`[NodeBattle] 防守成功: 攻击方全灭${attackerLoss}, 节点#${targetNode.id} 驻军 ${prevGarrison}→${targetNode.garrisonCount}`);
 
             return new NodeBattleResult(
                 NodeBattleOutcome.DEFENDER_WINS,

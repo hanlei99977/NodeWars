@@ -58,16 +58,19 @@ export class SaveSlotsUI extends Component {
 
     onSlotClicked(_event: Event, slotId: string): void {
         const id = parseInt(slotId, 10);
+        console.log(`[SaveSlotsUI] 读取存档: 槽位${id}`);
         if (this.onLoadSlot) this.onLoadSlot(id);
     }
 
     onDeleteClicked(_event: Event, slotId: string): void {
         const id = parseInt(slotId, 10);
+        console.log(`[SaveSlotsUI] 删除存档: 槽位${id}`);
         SaveSystem.deleteSlot(id);
         this.refresh();
     }
 
     onCloseClicked(): void {
+        console.log(`[SaveSlotsUI] 关闭`);
         if (this.onClose) this.onClose();
     }
 }

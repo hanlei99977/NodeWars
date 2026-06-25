@@ -23,12 +23,15 @@ export class ArmyCollisionSystem {
         if (armyA.soldierCount <= 0 || armyB.soldierCount <= 0) return null;
         if (armyA.state !== ArmyState.MOVING || armyB.state !== ArmyState.MOVING) return null;
 
+        console.log(`[EdgeBattle] 线路遭遇: 军队#${armyA.id}(${armyA.ownerId}) ${armyA.soldierCount}人 VS 军队#${armyB.id}(${armyB.ownerId}) ${armyB.soldierCount}人`);
+
         if (armyA.soldierCount > armyB.soldierCount) {
             return ArmyCollisionSystem.doBattle(armyA, armyB);
         } else if (armyB.soldierCount > armyA.soldierCount) {
             return ArmyCollisionSystem.doBattle(armyB, armyA);
         }
         // 兵力相等时双方同归于尽，指定armyA为名义"胜方"但剩余为0
+        console.log(`[EdgeBattle] 同归于尽: 双方各${armyA.soldierCount}人, 全部阵亡`);
         armyA.soldierCount = 0;
         armyB.soldierCount = 0;
         return new EdgeBattleResult(armyA, armyB, 0);
@@ -94,7 +97,8 @@ export class ArmyCollisionSystem {
         const remainder = winner.soldierCount - loser.soldierCount;
         winner.soldierCount = remainder;
         loser.soldierCount = 0;
-        loser.state = ArmyState.STATIONED; // 标记失败，后续由ArmyManager清理（军队人数为0或不在移动状态会被移除）
+        loser.state = ArmyState.STATIONED;
+        console.log(`[EdgeBattle] 战斗结果: 军队#${winner.id}(${winner.ownerId}) 胜, 剩余${remainder}人, 军队#${loser.id}(${loser.ownerId}) 全灭`);
         return new EdgeBattleResult(winner, loser, remainder);
     }
 }
