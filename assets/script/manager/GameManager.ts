@@ -522,7 +522,7 @@ export class GameManager extends Component {
     }
 
     // 点击某个节点 → 弹出 NodePanel 并绑定数据
-    private onNodeClicked(nodeId: number, e: EventTouch): void {
+    private onNodeClicked(nodeId: number, _e: EventTouch): void {
         if (!this.nodePanel) return;
         const node = this._nodes[nodeId];
         if (!node) return;
@@ -530,31 +530,62 @@ export class GameManager extends Component {
         this.nodePanel.bindToEntity(node, OwnerType.PLAYER);
         this.nodePanel.node.active = true;
 
+        const refreshAfter = () => {
+            this.refreshMapViews();
+            if (this.nodePanel) this.nodePanel.refreshPanel();
+        };
+
         // 绑定回调
-        this.nodePanel.onUpgrade = (id) => NodeUpgradeSystem.startUpgrade(this._nodes[id], OwnerType.PLAYER);
-        this.nodePanel.onConvertToFortress = (id) => NodeConvertSystem.startConvert(this._nodes[id], NodeType.FORTRESS, OwnerType.PLAYER);
-        this.nodePanel.onConvertToMarket = (id) => NodeConvertSystem.startConvert(this._nodes[id], NodeType.MARKET, OwnerType.PLAYER);
-        this.nodePanel.onRecruit = (id) => RecruitSystem.startRecruit(this._nodes[id], OwnerType.PLAYER);
+        this.nodePanel.onUpgrade = (id) => {
+            NodeUpgradeSystem.startUpgrade(this._nodes[id], OwnerType.PLAYER);
+            refreshAfter();
+        };
+        this.nodePanel.onConvertToFortress = (id) => {
+            NodeConvertSystem.startConvert(this._nodes[id], NodeType.FORTRESS, OwnerType.PLAYER);
+            refreshAfter();
+        };
+        this.nodePanel.onConvertToMarket = (id) => {
+            NodeConvertSystem.startConvert(this._nodes[id], NodeType.MARKET, OwnerType.PLAYER);
+            refreshAfter();
+        };
+        this.nodePanel.onRecruit = (id) => {
+            RecruitSystem.startRecruit(this._nodes[id], OwnerType.PLAYER);
+            refreshAfter();
+        };
 
         this.nodePanel.onSendTroops = (id, count) => {
-            if (count <= 0 || count >= this._nodes[id].garrisonCount) return;
-            this._nodes[id].garrisonCount -= count;
-            // 默认向邻接的第一个节点移动（后续可改为选择目标节点）
-            const neighbors = ArmyManager.adjList[id];
-            const target = neighbors && neighbors.length > 0 ? neighbors[0] : -1;
-            if (target < 0) { this._nodes[id].garrisonCount += count; return; }
+            const srcNode = this._nodes[id];
+            if (count <= 0 || count > srcNode.garrisonCount) return;
+
+            const neighbors = ArmyManager.adjList[id] || [];
+            // 优先选择非己方节点作为攻击目标，其次选择顺位第一个
+            let target = neighbors.find(nid => this._nodes[nid] && this._nodes[nid].ownerId !== OwnerType.PLAYER);
+            if (target === undefined) target = neighbors[0];
+            if (target === undefined) return;
+
+            srcNode.garrisonCount -= count;
             const path = ArmyManager.findPath(id, target);
             if (path && path.length >= 2) {
                 ArmyManager.createArmy(OwnerType.PLAYER, count, path);
             } else {
-                this._nodes[id].garrisonCount += count;
+                srcNode.garrisonCount += count;
             }
+            refreshAfter();
         };
 
         this.nodePanel.onClose = () => { if (this.nodePanel) this.nodePanel.node.active = false; };
-        this.nodePanel.onBatchUpgradeAll = () => NodeUpgradeSystem.batchUpgrade(this._nodes, 'all', OwnerType.PLAYER, ArmyManager.adjList);
-        this.nodePanel.onBatchUpgradeFortress = () => NodeUpgradeSystem.batchUpgrade(this._nodes, 'fortress', OwnerType.PLAYER, ArmyManager.adjList);
-        this.nodePanel.onBatchUpgradeMarket = () => NodeUpgradeSystem.batchUpgrade(this._nodes, 'market', OwnerType.PLAYER, ArmyManager.adjList);
+        this.nodePanel.onBatchUpgradeAll = () => {
+            NodeUpgradeSystem.batchUpgrade(this._nodes, 'all', OwnerType.PLAYER, ArmyManager.adjList);
+            refreshAfter();
+        };
+        this.nodePanel.onBatchUpgradeFortress = () => {
+            NodeUpgradeSystem.batchUpgrade(this._nodes, 'fortress', OwnerType.PLAYER, ArmyManager.adjList);
+            refreshAfter();
+        };
+        this.nodePanel.onBatchUpgradeMarket = () => {
+            NodeUpgradeSystem.batchUpgrade(this._nodes, 'market', OwnerType.PLAYER, ArmyManager.adjList);
+            refreshAfter();
+        };
 
         this.refreshMapViews();
     }

@@ -240,6 +240,7 @@ export class SceneBuilder extends Component {
         gm.hud          = hudC;
         gm.saveSlotsUI  = sv;
         gm.gameOverUI   = go;
+        gm.nodePanel    = np;
     }
 
     // --- NodePanel 子节点 ---
