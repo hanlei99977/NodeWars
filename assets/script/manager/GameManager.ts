@@ -1,4 +1,4 @@
-import { _decorator, Component, director, Node, Graphics, Color, Label, UITransform, EventTouch } from 'cc';
+import { _decorator, Component, director, Node, Graphics, Color, Label, UITransform, EventTouch, Vec2 } from 'cc';
 import { NodeEntity } from '../entity/NodeEntity';
 import { EdgeEntity } from '../entity/EdgeEntity';
 import { ArmyEntity } from '../entity/ArmyEntity';
@@ -12,6 +12,7 @@ import { EconomySystem } from '../economy/EconomySystem';
 import { RecruitSystem } from '../recruit/RecruitSystem';
 import { NodeUpgradeSystem } from '../manager/NodeUpgradeSystem';
 import { NodeConvertSystem } from '../manager/NodeConvertSystem';
+import { EdgeUpgradeSystem } from '../manager/EdgeUpgradeSystem';
 import { AIController } from '../ai/AIController';
 import { FogSystem } from '../fog/FogSystem';
 import { EventSystem } from '../event/EventSystem';
@@ -21,6 +22,8 @@ import { SaveSlotsUI } from '../ui/SaveSlotsUI';
 import { GameOverUI } from '../ui/GameOverUI';
 import { NewGameConfig } from '../ui/LobbyUI';
 import { NodePanel } from '../ui/NodePanel';
+import { EdgePanel } from '../ui/EdgePanel';
+import { ArmyPanel } from '../ui/ArmyPanel';
 
 const { ccclass, property } = _decorator;
 
@@ -41,11 +44,19 @@ export class GameManager extends Component {
     @property(NodePanel)
     nodePanel: NodePanel | null = null;
 
+    @property(EdgePanel)
+    edgePanel: EdgePanel | null = null;
+
+    @property(ArmyPanel)
+    armyPanel: ArmyPanel | null = null;
+
     // --- Map Layer ---
     private _mapLayer: Node | null = null;
     private _nodeGraphics: (Graphics | null)[] = [];
     private _nodeOwnerLabels: (Label | null)[] = [];
+    private _edgeNodes: Map<number, Node> = new Map();
     private _armyViewNodes: Map<number, Node> = new Map();
+    private _dragLastPos: Vec2 | null = null;
 
     private static readonly NODE_RADIUS = 18;// 节点半径
     private static readonly OWNER_COLORS: Record<string, Color> = {
@@ -430,8 +441,33 @@ export class GameManager extends Component {
         this._mapLayer = new Node('MapLayer');
         this.node.addChild(this._mapLayer);
 
-        // 给 Canvas → MapLayer 居中偏移（原点放中间）
-        this._mapLayer.setPosition(0, -40, 0);
+        // 计算所有节点的包围盒，使地图居中
+        let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+        for (const n of this._nodes) {
+            if (n.position.x < minX) minX = n.position.x;
+            if (n.position.x > maxX) maxX = n.position.x;
+            if (n.position.y < minY) minY = n.position.y;
+            if (n.position.y > maxY) maxY = n.position.y;
+        }
+        const centroidX = (minX + maxX) / 2;
+        const centroidY = (minY + maxY) / 2;
+        this._mapLayer.setPosition(-centroidX, -centroidY, 0);
+
+        // MapLayer 拖拽 → 平移视角
+        this._mapLayer.on(Node.EventType.TOUCH_START, (e: EventTouch) => {
+            this._dragLastPos = e.getUILocation();
+        });
+        this._mapLayer.on(Node.EventType.TOUCH_MOVE, (e: EventTouch) => {
+            if (!this._dragLastPos) return;
+            const cur = e.getUILocation();
+            const dx = cur.x - this._dragLastPos.x;
+            const dy = cur.y - this._dragLastPos.y;
+            this._dragLastPos.set(cur.x, cur.y);
+            if (!this._mapLayer) return;
+            const pos = this._mapLayer.position;
+            this._mapLayer.setPosition(pos.x + dx, pos.y + dy, pos.z);
+        });
+        this._mapLayer.on(Node.EventType.TOUCH_END, () => { this._dragLastPos = null; });
 
         // 先画边（在下层），后画节点（在上层）
         for (const edge of this._edges) {
@@ -450,6 +486,8 @@ export class GameManager extends Component {
     private clearMap(): void {
         this._armyViewNodes.forEach(n => n.destroy());
         this._armyViewNodes.clear();
+        this._edgeNodes.forEach(n => n.destroy());
+        this._edgeNodes.clear();
         if (this._mapLayer) {
             this._mapLayer.destroy();
             this._mapLayer = null;
@@ -458,18 +496,40 @@ export class GameManager extends Component {
         this._nodeOwnerLabels = [];
     }
 
-    // 创建一条线段的视觉节点
+    // 创建一条线段的视觉节点（可点击弹出 EdgePanel）
     private createEdgeGraphic(edge: EdgeEntity): void {
-        const gNode = new Node(`Edge_${edge.id}`);
-        const g = gNode.addComponent(Graphics);
+        const wrapper = new Node(`Edge_${edge.id}`);
         const posA = this._nodes[edge.nodeAId].position;
         const posB = this._nodes[edge.nodeBId].position;
+        const midX = (posA.x + posB.x) / 2;
+        const midY = (posA.y + posB.y) / 2;
+        const dx = posB.x - posA.x;
+        const dy = posB.y - posA.y;
+        const len = Math.sqrt(dx * dx + dy * dy);
+        const angle = Math.atan2(dy, dx) * (180 / Math.PI);
+        const ui = wrapper.addComponent(UITransform);
+        ui.setContentSize(len + 20, 28);
+        wrapper.setPosition(midX, midY, 0);
+        wrapper.setRotationFromEuler(0, 0, angle);
+
+        // 绘制线段
+        const gNode = new Node('Line');
+        const g = gNode.addComponent(Graphics);
         g.strokeColor = GameManager.EDGE_COLORS[edge.level] || GameManager.EDGE_COLORS[1];
         g.lineWidth = GameManager.EDGE_WIDTHS[edge.level] || 2;
-        g.moveTo(posA.x, posA.y);
-        g.lineTo(posB.x, posB.y);
+        g.moveTo(-len / 2, 0);
+        g.lineTo(len / 2, 0);
         g.stroke();
-        this._mapLayer!.addChild(gNode);
+        wrapper.addChild(gNode);
+
+        // 点击 → EdgePanel
+        wrapper.on(Node.EventType.TOUCH_START, (e: EventTouch) => {
+            e.propagationStopped = true;
+            this.onEdgeClicked(edge.id);
+        });
+
+        this._edgeNodes.set(edge.id, wrapper);
+        this._mapLayer!.addChild(wrapper);
     }
 
     // 为一个节点创建圆形图形 + 信息标签 + 点击事件
@@ -515,6 +575,7 @@ export class GameManager extends Component {
 
         // 点击事件 → 打开 NodePanel
         wrapper.on(Node.EventType.TOUCH_START, (e: EventTouch) => {
+            e.propagationStopped = true;
             this.onNodeClicked(n.id, e);
         });
 
@@ -634,9 +695,12 @@ export class GameManager extends Component {
         }
     }
 
-    // 创建一支军队视图节点
+    // 创建一支军队视图节点（可点击弹出 ArmyPanel）
     private createArmyGraphic(army: ArmyEntity): Node {
         const vn = new Node(`Army_${army.id}`);
+        const vnUi = vn.addComponent(UITransform);
+        vnUi.setContentSize(30, 30);
+
         const g = vn.addComponent(Graphics);
         const color = this.getOwnerColor(army.ownerId);
         g.fillColor = color;
@@ -655,6 +719,12 @@ export class GameManager extends Component {
         lbl.color = Color.WHITE;
         lbl.node.getComponent(UITransform)!.setContentSize(50, 18);
         vn.addChild(lblNode);
+
+        // 点击 → ArmyPanel
+        vn.on(Node.EventType.TOUCH_START, (e: EventTouch) => {
+            e.propagationStopped = true;
+            this.onArmyClicked(army.id);
+        });
 
         this._mapLayer!.addChild(vn);
         return vn;
@@ -685,5 +755,39 @@ export class GameManager extends Component {
             return GameManager.AI_COLORS[aiIdx];
         }
         return new Color(200, 60, 60);
+    }
+
+    // 点击线路 → EdgePanel
+    private onEdgeClicked(edgeId: number): void {
+        if (!this.edgePanel) return;
+        const edge = this._edges.find(e => e.id === edgeId);
+        if (!edge) return;
+
+        this.edgePanel.bindToEntity(edge);
+        this.edgePanel.node.active = true;
+
+        this.edgePanel.onUpgrade = () => {
+            EdgeUpgradeSystem.upgradeEdge(edge, this._nodes, OwnerType.PLAYER);
+            this.edgePanel!.refresh();
+            this.refreshMapViews();
+        };
+
+        this.edgePanel.onClose = () => {
+            if (this.edgePanel) this.edgePanel.node.active = false;
+        };
+    }
+
+    // 点击军队 → ArmyPanel
+    private onArmyClicked(armyId: number): void {
+        if (!this.armyPanel) return;
+        const army = this._armies.find(a => a.id === armyId);
+        if (!army) return;
+
+        this.armyPanel.bindToEntity(army);
+        this.armyPanel.node.active = true;
+
+        this.armyPanel.onClose = () => {
+            if (this.armyPanel) this.armyPanel.node.active = false;
+        };
     }
 }
