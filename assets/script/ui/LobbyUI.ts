@@ -1,4 +1,4 @@
-import { _decorator, Component, Label, Button } from 'cc';
+import { _decorator, Component, Label, Button, director } from 'cc';
 import { MapSize, Difficulty, FogMode, GameSpeed } from '../config/EnumDefine';
 import { GameConfig } from '../config/GameConfig';
 import { SaveSystem } from '../save/SaveSystem';
@@ -103,10 +103,7 @@ export class LobbyUI extends Component {
     private _gameSpeedIndex = 0;
     private _gameSpeedValues: number[] = GameConfig.GAME_SPEEDS;
 
-    // 外部回调
-    // 只是回调占位变量，无内部实现
-    onStartGame: ((mapSize: MapSize, aiCount: number, difficulty: Difficulty, fogMode: FogMode, gameSpeed: GameSpeed) => void) | null = null;
-    onContinueGame: (() => void) | null = null;
+    static readonly GAME_SCENE = 'GameScene';
 
     onLoad(): void {
         this.refreshAll();
@@ -174,20 +171,19 @@ export class LobbyUI extends Component {
 
     // --- 开始/继续 ---
     onStartClicked(): void {
-        if (this.onStartGame) {
-            const mapSize = this._mapSizeValues[this._mapSizeIndex];
-            const difficulty = this._difficultyValues[this._difficultyIndex];
-            const fogMode = this._fogOn ? FogMode.FOG : FogMode.NONE;
-            const speed = this._gameSpeedValues[this._gameSpeedIndex] as GameSpeed;
-            this.onStartGame(mapSize, this._aiCount, difficulty, fogMode, speed);
-        }
+        const mapSize = this._mapSizeValues[this._mapSizeIndex];
+        const difficulty = this._difficultyValues[this._difficultyIndex];
+        const fogMode = this._fogOn ? FogMode.FOG : FogMode.NONE;
+        const speed = this._gameSpeedValues[this._gameSpeedIndex] as GameSpeed;
+        // 将新游戏参数传递给 GameManager
+        NewGameConfig.set(mapSize, this._aiCount, difficulty, fogMode, speed);
+        director.loadScene(LobbyUI.GAME_SCENE);
     }
 
     onContinueClicked(): void {
-        // 检查是否有存档
         const hasSaves = SaveSystem.getSlotList().some(s => !s.isEmpty);
-        if (hasSaves && this.onContinueGame) {
-            this.onContinueGame();
+        if (hasSaves) {
+            director.loadScene(LobbyUI.GAME_SCENE);
         }
     }
 
@@ -242,5 +238,22 @@ export class LobbyUI extends Component {
             const hasSaves = SaveSystem.getSlotList().some(s => !s.isEmpty);
             this.continueBtn.node.active = hasSaves;
         }
+    }
+}
+
+// 新游戏参数桥接：LobbyUI 场景存参 → GameScene 加载后 GameManager 读取
+export class NewGameConfig {
+    static mapSize: MapSize = MapSize.SMALL;
+    static aiCount = 1;
+    static difficulty: Difficulty = Difficulty.EASY;
+    static fogMode: FogMode = FogMode.NONE;
+    static gameSpeed: GameSpeed = GameSpeed.X1;
+
+    static set(mapSize: MapSize, aiCount: number, difficulty: Difficulty, fogMode: FogMode, gameSpeed: GameSpeed): void {
+        NewGameConfig.mapSize = mapSize;
+        NewGameConfig.aiCount = aiCount;
+        NewGameConfig.difficulty = difficulty;
+        NewGameConfig.fogMode = fogMode;
+        NewGameConfig.gameSpeed = gameSpeed;
     }
 }

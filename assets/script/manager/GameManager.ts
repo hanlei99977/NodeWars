@@ -1,4 +1,4 @@
-import { _decorator, Component } from 'cc';
+import { _decorator, Component, director } from 'cc';
 import { NodeEntity } from '../entity/NodeEntity';
 import { EdgeEntity } from '../entity/EdgeEntity';
 import { ArmyEntity } from '../entity/ArmyEntity';
@@ -16,12 +16,26 @@ import { AIController } from '../ai/AIController';
 import { FogSystem } from '../fog/FogSystem';
 import { EventSystem } from '../event/EventSystem';
 import { SaveSystem } from '../save/SaveSystem';
+import { HUDController } from '../ui/HUDController';
+import { SaveSlotsUI } from '../ui/SaveSlotsUI';
+import { GameOverUI } from '../ui/GameOverUI';
+import { NewGameConfig } from '../ui/LobbyUI';
 
-const { ccclass } = _decorator;
+const { ccclass, property } = _decorator;
 
 // 游戏总控制器，负责初始化所有子系统并按顺序驱动主循环
 @ccclass('GameManager')
 export class GameManager extends Component {
+
+    // --- UI 组件引用（编辑器拖入） ---
+    @property(HUDController)
+    hud: HUDController | null = null;
+
+    @property(SaveSlotsUI)
+    saveSlotsUI: SaveSlotsUI | null = null;
+
+    @property(GameOverUI)
+    gameOverUI: GameOverUI | null = null;
 
     // --- 游戏状态 ---
     private _gameState: GameState = GameState.PLAYING;
@@ -49,7 +63,25 @@ export class GameManager extends Component {
     // --- 外部回调 ---
     onStateChanged: ((state: GameState) => void) | null = null;
 
-    // 公开入口：由 LobbyUI 的 onStartGame 调用
+    // 场景加载后自动启动或打开存档面板
+    onLoad(): void {
+        if (NewGameConfig.mapSize) {
+            this.startGame(
+                NewGameConfig.mapSize,
+                NewGameConfig.aiCount,
+                NewGameConfig.difficulty,
+                NewGameConfig.fogMode,
+                NewGameConfig.gameSpeed,
+            );
+        }
+        // 无新游戏参数 → 弹出存档槽位面板让玩家选
+        if (!this._nodes.length && this.saveSlotsUI) {
+            this.saveSlotsUI.node.active = true;
+            this.saveSlotsUI.refresh();
+        }
+    }
+
+    // 公开入口：由 LobbyUI → NewGameConfig 自动触发，也可外部直接调用
     startGame(mapSize: MapSize, aiCount: number, difficulty: Difficulty, fogMode: FogMode, gameSpeed: GameSpeed): void {
         this._mapSize = mapSize;
         this._aiCount = aiCount;
@@ -82,6 +114,7 @@ export class GameManager extends Component {
 
         // 重初始化各子系统
         this.initSystems(false);
+        this.wireUI();
         this.changeState(GameState.PLAYING);
     }
 
@@ -110,6 +143,7 @@ export class GameManager extends Component {
 
         // 3. 初始化各子系统（全新开局）
         this.initSystems(true);
+        this.wireUI();
         this.changeState(GameState.PLAYING);
     }
 
@@ -191,7 +225,13 @@ export class GameManager extends Component {
         // --- 7. 胜败判定 ---
         this.checkWinLose();
 
-        // --- 8. 自动保存 ---
+        // --- 8. 驱动 HUD ---
+        if (this.hud) {
+            this.hud.bindSpeed(this._gameSpeed);
+            this.hud.refresh(this._totalTime, this._gameState, AIController.allianceState);
+        }
+
+        // --- 9. 自动保存 ---
         this.autoSave();
     }
 
@@ -277,6 +317,38 @@ export class GameManager extends Component {
     private changeState(state: GameState): void {
         this._gameState = state;
         if (this.onStateChanged) this.onStateChanged(state);
+
+        // 游戏结束 → 弹出 GameOverUI
+        if (state === GameState.WIN || state === GameState.LOSE) {
+            if (this.gameOverUI) {
+                const nodeCount = this._nodes.filter(n => n.ownerId === OwnerType.PLAYER).length;
+                const reward = GameConfig.DIFFICULTY_GOLD_REWARD[this._difficulty];
+                this.gameOverUI.show(state, this._totalTime, nodeCount, reward);
+            }
+        }
+    }
+
+    // 连接 HUD / SaveSlotsUI / GameOverUI 的回调
+    private wireUI(): void {
+        if (this.hud) {
+            this.hud.onPauseToggle = () => this.togglePause();
+            this.hud.onSpeedChange = (s) => {
+                this.setGameSpeed(s);
+                if (this.hud) this.hud.bindSpeed(s);
+            };
+        }
+
+        if (this.saveSlotsUI) {
+            this.saveSlotsUI.onLoadSlot = (slotId) => this.loadGame(slotId);
+            this.saveSlotsUI.onClose = () => {
+                if (this.saveSlotsUI) this.saveSlotsUI.node.active = false;
+            };
+        }
+
+        if (this.gameOverUI) {
+            this.gameOverUI.onRestart = () => director.loadScene('LobbyScene');
+            this.gameOverUI.onBackToLobby = () => director.loadScene('LobbyScene');
+        }
     }
 
     // --- 外部只读查询 ---
