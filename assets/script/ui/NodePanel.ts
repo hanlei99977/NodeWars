@@ -87,12 +87,21 @@ export class NodePanel extends Component {
     @property(Button)
     closeBtn: Button | null = null;             // 关闭面板按钮
 
-    // --- 自动征兵开关 ---
+    // --- 自动征兵 ---
     @property(Button)
-    autoRecruitToggleBtn: Button | null = null; // 自动征兵开关
+    autoRecruitPrevBtn: Button | null = null;
 
     @property(Label)
-    autoRecruitToggleLabel: Label | null = null;// 开关状态文字
+    autoRecruitThresholdLabel: Label | null = null;
+
+    @property(Button)
+    autoRecruitNextBtn: Button | null = null;
+
+    @property(Button)
+    autoRecruitToggleBtn: Button | null = null;
+
+    @property(Label)
+    autoRecruitToggleLabel: Label | null = null;
 
     // --- 批量升级 ---
     @property(Button)
@@ -107,7 +116,6 @@ export class NodePanel extends Component {
     // --- 内部状态 ---
     private _entity: NodeEntity | null = null;
     private _ownerId: string = '';
-    private _autoRecruitEnabled: boolean = false;
     private _troopCount: number = 0;
     private _maxTroops: number = 0;
     private _recruitCount: number = 0;
@@ -188,23 +196,25 @@ export class NodePanel extends Component {
         this._troopCount = Math.min(this._troopCount, this._maxTroops);
         this.updateTroopLabel();
 
+        this.updateAutoRecruitLabels();
+
         const isOwnNode = this._entity.ownerId === OwnerType.PLAYER;
         this.setButtonsVisible(isOwnNode);
     }
 
-    // 派兵数量 -1
+    // 派兵数量 -100
     onTroopPrevClicked(): void {
         console.log(`[NodePanel] 派兵减: 当前=${this._troopCount}`);
         if (this._troopCount <= 0) return;
-        this._troopCount-=10;
+        this._troopCount-= Math.max(0,this._troopCount - 100);
         this.updateTroopLabel();
     }
 
-    // 派兵数量 +1
+    // 派兵数量 +100
     onTroopNextClicked(): void {
         console.log(`[NodePanel] 派兵加: 当前=${this._troopCount}`);
         if (this._troopCount >= this._maxTroops) return;
-        this._troopCount+=10;
+        this._troopCount+=Math.min(this._entity.garrisonCount, this._troopCount + 100);
         this.updateTroopLabel();
     }
 
@@ -255,14 +265,14 @@ export class NodePanel extends Component {
         }
     }
 
-    // 征兵数量 -1
+    // 征兵数量 -10
     onRecruitPrevClicked(): void {
         if (this._recruitCount <= 0) return;
         this._recruitCount = Math.max(0, this._recruitCount - 10);
         this.updateRecruitLabel();
     }
 
-    // 征兵数量 +1
+    // 征兵数量 +10
     onRecruitNextClicked(): void {
         if (this._recruitCount >= 100) return;
         this._recruitCount = Math.min(100, this._recruitCount + 10);
@@ -301,18 +311,40 @@ export class NodePanel extends Component {
         if (this.onBatchUpgradeMarket) this.onBatchUpgradeMarket();
     }
 
-    // 切换自动征兵
-    onAutoRecruitToggleClicked(): void {
-        console.log(`[NodePanel] 自动征兵切换: ${this._autoRecruitEnabled ? '开→关' : '关→开'}`);
-        this._autoRecruitEnabled = !this._autoRecruitEnabled;
-        if (this.autoRecruitToggleLabel) {
-            this.autoRecruitToggleLabel.string = this._autoRecruitEnabled ? '自动征兵：开' : '自动征兵：关';
-        }
+    // 自动征兵阈值 -100
+    onAutoRecruitPrevClicked(): void {
+        if (!this._entity) return;
+        this._entity.autoRecruitThreshold = Math.max(0, this._entity.autoRecruitThreshold - 100);
+        this.updateAutoRecruitLabels();
     }
 
-    // 获取当前自动征兵是否开启
-    get autoRecruitEnabled(): boolean {
-        return this._autoRecruitEnabled;
+    // 自动征兵阈值 +100
+    onAutoRecruitNextClicked(): void {
+        if (!this._entity) return;
+        this._entity.autoRecruitThreshold = Math.min(500, this._entity.autoRecruitThreshold + 100);
+        this.updateAutoRecruitLabels();
+    }
+
+    // 切换自动征兵开关
+    onAutoRecruitToggleClicked(): void {
+        if (!this._entity) return;
+        if (this._entity.autoRecruitThreshold > 0) {
+            this._entity.autoRecruitThreshold = 0;
+        } else {
+            this._entity.autoRecruitThreshold = 100;
+        }
+        this.updateAutoRecruitLabels();
+    }
+
+    private updateAutoRecruitLabels(): void {
+        if (!this._entity) return;
+        const enabled = this._entity.autoRecruitThreshold > 0;
+        if (this.autoRecruitThresholdLabel) {
+            this.autoRecruitThresholdLabel.string = `${this._entity.autoRecruitThreshold}`;
+        }
+        if (this.autoRecruitToggleLabel) {
+            this.autoRecruitToggleLabel.string = enabled ? '自动征兵：开' : '自动征兵：关';
+        }
     }
 
     // --- 内部辅助 ---
@@ -359,7 +391,7 @@ export class NodePanel extends Component {
             this.upgradeBtn, this.convertToFortressBtn, this.convertToMarketBtn,
             this.recruitPrevBtn, this.recruitNextBtn, this.recruitBtn,
             this.troopPrevBtn, this.troopNextBtn, this.sendTroopsBtn,
-            this.autoRecruitToggleBtn,
+            this.autoRecruitPrevBtn, this.autoRecruitNextBtn, this.autoRecruitToggleBtn,
             this.batchUpgradeAllBtn, this.batchUpgradeFortressBtn, this.batchUpgradeMarketBtn,
         ];
         for (const btn of btns) {

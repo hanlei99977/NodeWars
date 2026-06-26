@@ -64,6 +64,7 @@ export class NodeEntity {
     type: NodeType;                         // 节点建筑类型（普通/要塞/市场）
     specialType: SpecialNodeType;           // 特殊属性（无/金矿/军营/高地）
     garrisonCount: number;                  // 驻军人数
+    autoRecruitThreshold: number;            // 自动征兵阈值（0=关闭，>0=当驻军低于此数自动征兵100人）
     position: Vec2Data;                     // 地图坐标
     upgradeTask: UpgradeTask | null;        // 当前升级任务（最多一个）
     convertTask: ConvertTask | null;        // 当前转换任务（最多一个）
@@ -84,6 +85,7 @@ export class NodeEntity {
         this.type = type;
         this.specialType = specialType;
         this.garrisonCount = garrisonCount;
+        this.autoRecruitThreshold = 0;
         this.position = position;
         this.upgradeTask = null;
         this.convertTask = null;

@@ -279,6 +279,9 @@ export class GameManager extends Component {
         void AIController.update(logicDt, this._nodes, this._edges, this._armies);
         this._armies = ArmyManager.armies; // AI 可能派兵，刷新
 
+        // --- 6.5 玩家自动征兵 ---
+        this.processAutoRecruit();
+
         // --- 7. 胜败判定 ---
         this.checkWinLose();
 
@@ -917,6 +920,24 @@ export class GameManager extends Component {
         if (this.nodePanel) this.nodePanel.node.active = false;
         if (this.edgePanel) this.edgePanel.node.active = false;
         if (this.armyPanel) this.armyPanel.node.active = false;
+    }
+
+    private processAutoRecruit(): void {
+        for (const node of this._nodes) {
+            if (node.ownerId !== OwnerType.PLAYER) continue;
+            if (node.autoRecruitThreshold <= 0) continue;
+            if (node.isRecruitQueueFull) continue;
+            // 计算正在征兵中的军队与驻扎军队的总数
+            let all = node.recruitQueue.reduce((total,cur) => total + cur.soldierCount, 0);
+            // console.log(`正在征兵中的人数为： ${all}`);
+            all += node.garrisonCount;
+            if (all >= node.autoRecruitThreshold) continue;
+            
+            const cost = 100;
+            if (!EconomySystem.canAfford(OwnerType.PLAYER, cost)) continue;
+            RecruitSystem.startRecruit(node, OwnerType.PLAYER, cost);
+            console.log(`自动征兵 ${cost} 人`);
+        }
     }
 
     private refreshActivePanels(): void {

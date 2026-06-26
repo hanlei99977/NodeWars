@@ -17,6 +17,7 @@ interface NodeSaveData {
     type: string;
     specialType: string;
     garrisonCount: number;
+    autoRecruitThreshold: number;
     x: number;
     y: number;
     upgradeTask: { targetLevel: number; state: string; progress: number; totalTime: number } | null;
@@ -208,6 +209,7 @@ export class SaveSystem {
             type: n.type,
             specialType: n.specialType,
             garrisonCount: n.garrisonCount,
+            autoRecruitThreshold: n.autoRecruitThreshold,
             x: n.position.x,
             y: n.position.y,
             upgradeTask: n.upgradeTask ? {
@@ -292,6 +294,7 @@ export class SaveSystem {
                 task.progress = t.progress;
                 return task;
             });
+            node.autoRecruitThreshold = d.autoRecruitThreshold || 0;
             return node;
         });
     }

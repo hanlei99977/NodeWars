@@ -267,23 +267,26 @@ export class SceneBuilder extends Component {
     // --- NodePanel 子节点 ---
     private buildNodePanel(p: Node): void {
         const rowH = 36;
-        let y = 270;
-        makeLabel(p, 'N_Title', '节点 #', 0, y, 240, rowH, 24);                y -= rowH + 4;
-        makeLabel(p, 'N_Info', '', 0, y, 240, rowH, 24);                       y -= rowH + 4;
-        makeLabel(p, 'N_Garrison', '驻军：0', 0, y, 240, rowH, 24);            y -= rowH + 4;
-        makeLabel(p, 'N_Build', '空闲', 0, y, 240, rowH, 24);                  y -= rowH + 4;
+        let y = 330;
+        makeLabel(p, 'N_Title', '节点 #', 0, y, 240, rowH, 24);                y -= rowH ;
+        makeLabel(p, 'N_Info', '', 0, y, 240, rowH, 24);                       y -= rowH ;
+        makeLabel(p, 'N_Garrison', '驻军：0', 0, y, 240, rowH, 24);            y -= rowH ;
+        makeLabel(p, 'N_Build', '空闲', 0, y, 240, rowH, 24);                  y -= rowH ;
         makeLabel(p, 'N_Recruit', '征兵队列：空', 0, y, 240, rowH, 24);        y -= rowH + 8;
         makeBtn(p, 'N_Upgrade', '升级', 0, y, 180, rowH, 24);                      y -= rowH + 8;
-        makeBtn(p, 'N_CvtFort', '转要塞', 0, y, 180, rowH, 24);                    y -= rowH + 8;
-        makeBtn(p, 'N_CvtMarket', '转市场', 0, y, 180, rowH, 24);                  y -= rowH + 8;
+        makeBtn(p, 'N_CvtFort', '转要塞', -45, y, 90, rowH, 24);                    
+        makeBtn(p, 'N_CvtMarket', '转市场', 70, y, 90, rowH, 24);                  y -= rowH + 8;
         makeBtn(p, 'N_RecruitPrev', '-', -100, y, 60, rowH, 24);
-        makeLabel(p, 'N_RecruitCnt', '0 兵', 0, y, 80, rowH, 24);
-        makeBtn(p, 'N_RecruitNext', '+', 100, y, 60, rowH, 24);                     y -= rowH + 8;
-        makeBtn(p, 'N_RecruitB', '征兵', 0, y, 180, rowH, 24);                      y -= rowH + 8;
+        makeLabel(p, 'N_RecruitCnt', '0 兵', -50, y, 80, rowH, 24);
+        makeBtn(p, 'N_RecruitNext', '+', 0, y, 60, rowH, 24);                     
+        makeBtn(p, 'N_RecruitB', '征兵', 90, y, 100, rowH, 24);                      y -= rowH + 8;
         makeBtn(p, 'N_TroopPrev', '-', -100, y, 60, rowH, 24);
-        makeLabel(p, 'N_TroopCnt', '0 兵', 0, y, 80, rowH, 24);
-        makeBtn(p, 'N_TroopNext', '+', 100, y, 60, rowH, 24);                     y -= rowH + 8;
-        makeBtn(p, 'N_Send', '派兵', 0, y, 180, rowH, 24);                         y -= rowH + 8;
+        makeLabel(p, 'N_TroopCnt', '0 兵', -50, y, 80, rowH, 24);
+        makeBtn(p, 'N_TroopNext', '+', 0, y, 60, rowH, 24);                     
+        makeBtn(p, 'N_Send', '派兵', 80, y, 100, rowH, 24);                         y -= rowH + 8;
+        makeBtn(p, 'N_ARctPrev', '-', -100, y, 60, rowH, 24);
+        makeLabel(p, 'N_ARctThresh', '0', 0, y, 80, rowH, 24);
+        makeBtn(p, 'N_ARctNext', '+', 100, y, 60, rowH, 24);                       y -= rowH + 8;
         makeBtn(p, 'N_AutoRct', '自动征兵：关', 0, y, 180, rowH, 24);              y -= rowH + 8;
         makeBtn(p, 'N_BatchAll', '批量升级全部', 0, y, 180, rowH, 24);             y -= rowH + 8;
         makeBtn(p, 'N_BatchFort', '批量升级要塞', 0, y, 180, rowH, 24);            y -= rowH + 8;
@@ -312,6 +315,9 @@ export class SceneBuilder extends Component {
         np.troopNextBtn           = g('N_TroopNext')?.getComponent(Button) ?? null;
         np.sendTroopsBtn          = g('N_Send')?.getComponent(Button) ?? null;
         np.closeBtn               = g('N_Close')?.getComponent(Button) ?? null;
+        np.autoRecruitPrevBtn     = g('N_ARctPrev')?.getComponent(Button) ?? null;
+        np.autoRecruitThresholdLabel = g('N_ARctThresh')?.getComponent(Label) ?? null;
+        np.autoRecruitNextBtn     = g('N_ARctNext')?.getComponent(Button) ?? null;
         np.autoRecruitToggleBtn   = g('N_AutoRct')?.getComponent(Button) ?? null;
         np.autoRecruitToggleLabel = g('N_AutoRct')?.getChildByName('N_AutoRct_Lbl')?.getComponent(Label) ?? null;
         np.batchUpgradeAllBtn     = g('N_BatchAll')?.getComponent(Button) ?? null;
@@ -328,6 +334,8 @@ export class SceneBuilder extends Component {
         bindClick(np.troopNextBtn!, p, 'NodePanel', 'onTroopNextClicked');
         bindClick(np.sendTroopsBtn!, p, 'NodePanel', 'onSendTroopsClicked');
         bindClick(np.closeBtn!, p, 'NodePanel', 'onCloseClicked');
+        bindClick(np.autoRecruitPrevBtn!, p, 'NodePanel', 'onAutoRecruitPrevClicked');
+        bindClick(np.autoRecruitNextBtn!, p, 'NodePanel', 'onAutoRecruitNextClicked');
         bindClick(np.autoRecruitToggleBtn!, p, 'NodePanel', 'onAutoRecruitToggleClicked');
         bindClick(np.batchUpgradeAllBtn!, p, 'NodePanel', 'onBatchUpgradeAllClicked');
         bindClick(np.batchUpgradeFortressBtn!, p, 'NodePanel', 'onBatchUpgradeFortressClicked');
