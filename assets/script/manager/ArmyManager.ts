@@ -68,6 +68,16 @@ export class ArmyManager {
         ArmyManager._armies = ArmyManager._armies.filter(a => a.id !== armyId);
     }
 
+    // 军队越过己方中间节点，跳到路径中下一条边
+    static advanceArmy(armyId: number): void {
+        const army = ArmyManager._armies.find(a => a.id === armyId);
+        if (!army || !army.hasMoreEdges) return;
+        army.currentEdgeIndex++;
+        army.progress = 0;
+        ArmyManager.execPendingReroute(army, army.currentNodeId);
+        console.log(`[ArmyManager] 军队#${armyId} 越过己方节点#${army.currentNodeId}，进入边 ${army.currentNodeId}→${army.nextNodeId}`);
+    }
+
     // 每帧行军推进（传入逻辑时间增量 dt 秒），返回本帧产生的事件列表
     static update(dt: number): ArmyEvent[] {
         const events: ArmyEvent[] = [];
@@ -96,29 +106,20 @@ export class ArmyManager {
 
             // 推进进度
             army.progress += (currentSpeed * dt) / edge.length;
-            console.log(`progress ${army.progress}`)
+            // console.log(`progress ${army.progress}`)
             // 进度超过1表示到达边终点
             if (army.progress >= 1) {
                 army.progress = 1;
+                const arrivedNodeId = army.nextNodeId;
 
-                if (army.hasMoreEdges) {
-                    console.log(`[ArmyManager] 军队#${army.id} 到达边终点节点#${army.nextNodeId}，准备进入下一条边`);
-                    // 进入下一条边
-                    army.currentEdgeIndex++;
-                    army.progress = 0; // 进入下一条边，重置进度
+                events.push(ArmyManager.makeEvent(ArmyEventType.ARRIVED_AT_NODE, army, arrivedNodeId));
 
-                    // 到达的这个节点是 currentNodeId（即刚跨过的边的终点）
-                    const arrivedNodeId = army.currentNodeId;
-                    // 执行待执行的改道请求
-                    ArmyManager.execPendingReroute(army, arrivedNodeId);
+                if (army.destinationNodeId === arrivedNodeId) {
+                    // 到达最终终点，标记移除
+                    console.log(`[ArmyManager] 军队#${army.id} 到达最终终点节点#${arrivedNodeId}`);
+                    toRemove.push(army.id);
                 }
-            }
-
-            if (army.hasArrived) {
-                // 到达最终终点
-                console.log(`[ArmyManager] 军队#${army.id} 到达最终终点节点#${army.destinationNodeId}`);
-                events.push(ArmyManager.makeEvent(ArmyEventType.ARRIVED_AT_NODE, army, army.destinationNodeId));
-                toRemove.push(army.id);
+                // 中间节点：不自动跳到下一条边，由 GameManager.handleArmyArrival 决定
             }
         }
 

@@ -302,14 +302,29 @@ export class GameManager extends Component {
     private handleArmyArrival(army: ArmyEntity, nodeId: number): void {
         const node = this._nodes[nodeId];
         if (!node) return;
-        console.log(`[GameManager] 军队#${army.id} 到达节点#${nodeId} (owner=${node.ownerId}, garrison=${node.garrisonCount})`);
-        const result = NodeBattleSystem.resolve(army, node);
 
-        if (result.outcome === NodeBattleOutcome.ATTACKER_WINS) {
-            // 节点易主 → 通知迷雾
-            FogSystem.recordAttack(node, army.ownerId);
-        } else if (result.outcome === NodeBattleOutcome.DEFENDER_WINS) {
-            // 攻击失败 → 记录攻击情报（不记兵力）
+        const isFinalDest = nodeId === army.destinationNodeId;
+
+        if (isFinalDest) {
+            // 最终目标节点：无论友方还是敌方都结算
+            console.log(`[GameManager] 军队#${army.id} 到达最终目标节点#${nodeId} (owner=${node.ownerId}, garrison=${node.garrisonCount})`);
+            const result = NodeBattleSystem.resolve(army, node);
+            if (result.outcome === NodeBattleOutcome.ATTACKER_WINS || result.outcome === NodeBattleOutcome.DEFENDER_WINS) {
+                FogSystem.recordAttack(node, army.ownerId);
+            }
+            return;
+        }
+
+        // 中间节点：己方越过，敌方攻占
+        if (army.ownerId === node.ownerId) {
+            console.log(`[GameManager] 军队#${army.id} 越过己方中间节点#${nodeId}`);
+            ArmyManager.advanceArmy(army.id);
+            return;
+        }
+
+        console.log(`[GameManager] 军队#${army.id} 遭遇敌方中间节点#${nodeId} (owner=${node.ownerId}, garrison=${node.garrisonCount})`);
+        const result = NodeBattleSystem.resolve(army, node);
+        if (result.outcome === NodeBattleOutcome.ATTACKER_WINS || result.outcome === NodeBattleOutcome.DEFENDER_WINS) {
             FogSystem.recordAttack(node, army.ownerId);
         }
     }
