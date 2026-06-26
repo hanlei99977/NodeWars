@@ -747,13 +747,27 @@ export class GameManager extends Component {
 
             const visible = FogSystem.isNodeExplored(n.id, OwnerType.PLAYER);
 
+            g.clear();
+
             if (visible) {
                 const color = this.getOwnerColor(n.ownerId);
                 g.fillColor = color;
+                g.strokeColor = new Color(40, 40, 40);
+                g.lineWidth = 1.5;
+                g.circle(0, 0, GameManager.NODE_RADIUS);
+                g.fill();
+                g.stroke();
+
                 lbl.string = FogSystem.isNodeCurrentlyVisible(n.id, OwnerType.PLAYER)
                     ? `${n.garrisonCount}` : `?`;
             } else {
                 g.fillColor = new Color(60, 60, 60);
+                g.strokeColor = new Color(40, 40, 40);
+                g.lineWidth = 1.5;
+                g.circle(0, 0, GameManager.NODE_RADIUS);
+                g.fill();
+                g.stroke();
+
                 lbl.string = '';
             }
         }
