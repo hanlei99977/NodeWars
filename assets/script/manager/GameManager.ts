@@ -542,7 +542,7 @@ export class GameManager extends Component {
         const ml = this._mapLayer;
         const s = ml.scale.x;
         // 留少许 margin 让地图不全贴边
-        const margin = 100;
+        const margin = 400;
         const p = ml.position;
         const nx = Math.max(this._mapBounds.minX - margin, Math.min(this._mapBounds.maxX + margin, p.x));
         const ny = Math.max(this._mapBounds.minY - margin, Math.min(this._mapBounds.maxY + margin, p.y));
