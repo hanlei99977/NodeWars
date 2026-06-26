@@ -702,9 +702,9 @@ export class GameManager extends Component {
             NodeConvertSystem.startConvert(this._nodes[id], NodeType.MARKET, OwnerType.PLAYER);
             refreshAfter();
         };
-        this.nodePanel.onRecruit = (id) => {
-            console.log(`[GameManager] 节点征兵: #${id}`);
-            RecruitSystem.startRecruit(this._nodes[id], OwnerType.PLAYER);
+        this.nodePanel.onRecruit = (id, count) => {
+            console.log(`[GameManager] 节点征兵: #${id} 数量=${count}`);
+            RecruitSystem.startRecruit(this._nodes[id], OwnerType.PLAYER, count);
             refreshAfter();
         };
 
@@ -920,7 +920,7 @@ export class GameManager extends Component {
     }
 
     private refreshActivePanels(): void {
-        if (this.nodePanel && this.nodePanel.node.active) this.nodePanel.refreshPanel();
+        if (this.nodePanel && this.nodePanel.node.active) this.nodePanel.refreshLight();
         if (this.edgePanel && this.edgePanel.node.active) this.edgePanel.refresh();
         if (this.armyPanel && this.armyPanel.node.active) this.armyPanel.refresh();
     }

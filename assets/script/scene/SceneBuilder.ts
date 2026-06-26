@@ -276,7 +276,10 @@ export class SceneBuilder extends Component {
         makeBtn(p, 'N_Upgrade', '升级', 0, y, 180, rowH, 24);                      y -= rowH + 8;
         makeBtn(p, 'N_CvtFort', '转要塞', 0, y, 180, rowH, 24);                    y -= rowH + 8;
         makeBtn(p, 'N_CvtMarket', '转市场', 0, y, 180, rowH, 24);                  y -= rowH + 8;
-        makeBtn(p, 'N_RecruitB', '征兵 100金', 0, y, 180, rowH, 24);              y -= rowH + 8;
+        makeBtn(p, 'N_RecruitPrev', '-', -100, y, 60, rowH, 24);
+        makeLabel(p, 'N_RecruitCnt', '0 兵', 0, y, 80, rowH, 24);
+        makeBtn(p, 'N_RecruitNext', '+', 100, y, 60, rowH, 24);                     y -= rowH + 8;
+        makeBtn(p, 'N_RecruitB', '征兵', 0, y, 180, rowH, 24);                      y -= rowH + 8;
         makeBtn(p, 'N_TroopPrev', '-', -100, y, 60, rowH, 24);
         makeLabel(p, 'N_TroopCnt', '0 兵', 0, y, 80, rowH, 24);
         makeBtn(p, 'N_TroopNext', '+', 100, y, 60, rowH, 24);                     y -= rowH + 8;
@@ -299,6 +302,9 @@ export class SceneBuilder extends Component {
         np.upgradeBtnLabel        = g('N_Upgrade')?.getChildByName('N_Upgrade_Lbl')?.getComponent(Label) ?? null;
         np.convertToFortressBtn   = g('N_CvtFort')?.getComponent(Button) ?? null;
         np.convertToMarketBtn     = g('N_CvtMarket')?.getComponent(Button) ?? null;
+        np.recruitPrevBtn         = g('N_RecruitPrev')?.getComponent(Button) ?? null;
+        np.recruitCountLabel      = g('N_RecruitCnt')?.getComponent(Label) ?? null;
+        np.recruitNextBtn         = g('N_RecruitNext')?.getComponent(Button) ?? null;
         np.recruitBtn             = g('N_RecruitB')?.getComponent(Button) ?? null;
         np.recruitBtnLabel        = g('N_RecruitB')?.getChildByName('N_RecruitB_Lbl')?.getComponent(Label) ?? null;
         np.troopPrevBtn           = g('N_TroopPrev')?.getComponent(Button) ?? null;
@@ -315,7 +321,9 @@ export class SceneBuilder extends Component {
         bindClick(np.upgradeBtn!, p, 'NodePanel', 'onUpgradeClicked');
         bindClick(np.convertToFortressBtn!, p, 'NodePanel', 'onConvertToFortressClicked');
         bindClick(np.convertToMarketBtn!, p, 'NodePanel', 'onConvertToMarketClicked');
-        bindClick(np.recruitBtn!, p, 'NodePanel', 'onRecruitClicked');
+        bindClick(np.recruitPrevBtn!, p, 'NodePanel', 'onRecruitPrevClicked');
+        bindClick(np.recruitNextBtn!, p, 'NodePanel', 'onRecruitNextClicked');
+        bindClick(np.recruitBtn!, p, 'NodePanel', 'onRecruitBtnClicked');
         bindClick(np.troopPrevBtn!, p, 'NodePanel', 'onTroopPrevClicked');
         bindClick(np.troopNextBtn!, p, 'NodePanel', 'onTroopNextClicked');
         bindClick(np.sendTroopsBtn!, p, 'NodePanel', 'onSendTroopsClicked');

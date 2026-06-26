@@ -56,10 +56,19 @@ export class NodePanel extends Component {
 
     // --- 征兵 ---
     @property(Button)
-    recruitBtn: Button | null = null;           // 征兵按钮
+    recruitPrevBtn: Button | null = null;
 
     @property(Label)
-    recruitBtnLabel: Label | null = null;       // 征兵按钮文字
+    recruitCountLabel: Label | null = null;
+
+    @property(Button)
+    recruitNextBtn: Button | null = null;
+
+    @property(Button)
+    recruitBtn: Button | null = null;
+
+    @property(Label)
+    recruitBtnLabel: Label | null = null;
 
     // --- 派兵 ---
     @property(Button)
@@ -101,12 +110,13 @@ export class NodePanel extends Component {
     private _autoRecruitEnabled: boolean = false;
     private _troopCount: number = 0;
     private _maxTroops: number = 0;
+    private _recruitCount: number = 0;
 
     // 外部回调（由 GameManager 之类的外层绑定，处理实际逻辑）
     onUpgrade: ((nodeId: number) => void) | null = null;
     onConvertToFortress: ((nodeId: number) => void) | null = null;
     onConvertToMarket: ((nodeId: number) => void) | null = null;
-    onRecruit: ((nodeId: number) => void) | null = null;
+    onRecruit: ((nodeId: number, count: number) => void) | null = null;
     onSendTroops: ((nodeId: number, count: number) => void) | null = null;
     onClose: (() => void) | null = null;
     onBatchUpgradeAll: (() => void) | null = null;
@@ -127,52 +137,57 @@ export class NodePanel extends Component {
 
     // 根据实体最新数据刷新面板全部内容
     refreshPanel(): void {
+        this._refreshLabelsAndButtons(true);
+    }
+
+    // 轻量刷新（不重置派兵/征兵数量选择）
+    refreshLight(): void {
+        this._refreshLabelsAndButtons(false);
+    }
+
+    private _refreshLabelsAndButtons(resetCounts: boolean): void {
         if (!this._entity) return;
 
-        // 标题
         if (this.titleLabel) {
             this.titleLabel.string = `节点 #${this._entity.id}`;
         }
 
-        // 信息行
         if (this.infoLabel) {
             const typeName = TYPE_NAME_MAP[this._entity.type] || '未知';
             const specialName = SPECIAL_TYPE_NAME_MAP[this._entity.specialType] || '';
             this.infoLabel.string = `Lv${this._entity.level} ${typeName} ${specialName}`;
         }
 
-        // 驻军
         if (this.garrisonLabel) {
             this.garrisonLabel.string = `驻军：${this._entity.garrisonCount}`;
         }
 
-        // 建筑任务状态
         if (this.buildStatusLabel) {
             this.buildStatusLabel.string = this.getBuildStatusText();
         }
 
-        // 征兵队列状态
         if (this.recruitStatusLabel) {
             this.recruitStatusLabel.string = this.getRecruitStatusText();
         }
 
-        // 升级按钮
         this.refreshUpgradeButton();
 
-        // 类型转换按钮：仅空闲时可操作
         const canConvert = this._entity.isIdle;
         if (this.convertToFortressBtn) this.convertToFortressBtn.interactable = canConvert;
         if (this.convertToMarketBtn) this.convertToMarketBtn.interactable = canConvert;
 
-        // 征兵按钮
+        if (resetCounts) {
+            this._recruitCount = 0;
+            this._troopCount = 0;
+        }
+
+        this.updateRecruitLabel();
         this.refreshRecruitButton();
 
-        // 派兵
-        this._troopCount = Math.min(this._troopCount, this._maxTroops);
         this._maxTroops = this._entity.garrisonCount;
+        this._troopCount = Math.min(this._troopCount, this._maxTroops);
         this.updateTroopLabel();
 
-        // 面板显示/隐藏（玩家节点才显示操作，非玩家节点仅查看）
         const isOwnNode = this._entity.ownerId === OwnerType.PLAYER;
         this.setButtonsVisible(isOwnNode);
     }
@@ -209,6 +224,13 @@ export class NodePanel extends Component {
         }
     }
 
+    private updateRecruitLabel(): void {
+        if (this.recruitCountLabel) {
+            this.recruitCountLabel.string = `${this._recruitCount} 兵`;
+        }
+        this.refreshRecruitButton();
+    }
+
     // 升级按钮点击
     onUpgradeClicked(): void {
         console.log(`[NodePanel] 升级: 节点#${this._entity?.id}`);
@@ -233,11 +255,25 @@ export class NodePanel extends Component {
         }
     }
 
-    // 征兵
-    onRecruitClicked(): void {
-        console.log(`[NodePanel] 征兵: 节点#${this._entity?.id}`);
-        if (this._entity && this.onRecruit) {
-            this.onRecruit(this._entity.id);
+    // 征兵数量 -1
+    onRecruitPrevClicked(): void {
+        if (this._recruitCount <= 0) return;
+        this._recruitCount = Math.max(0, this._recruitCount - 10);
+        this.updateRecruitLabel();
+    }
+
+    // 征兵数量 +1
+    onRecruitNextClicked(): void {
+        if (this._recruitCount >= 100) return;
+        this._recruitCount = Math.min(100, this._recruitCount + 10);
+        this.updateRecruitLabel();
+    }
+
+    // 征兵按钮点击
+    onRecruitBtnClicked(): void {
+        console.log(`[NodePanel] 征兵: 节点#${this._entity?.id} 数量=${this._recruitCount}`);
+        if (this._entity && this._recruitCount > 0 && this.onRecruit) {
+            this.onRecruit(this._entity.id, this._recruitCount);
         }
     }
 
@@ -312,7 +348,7 @@ export class NodePanel extends Component {
             this.recruitBtnLabel.string = '征兵队列已满';
             this.recruitBtn.interactable = false;
         } else {
-            this.recruitBtnLabel.string = '征兵 100金';
+            this.recruitBtnLabel.string = `征兵 ${this._recruitCount}金`;
             this.recruitBtn.interactable = true;
         }
     }
@@ -321,7 +357,8 @@ export class NodePanel extends Component {
     private setButtonsVisible(visible: boolean): void {
         const btns = [
             this.upgradeBtn, this.convertToFortressBtn, this.convertToMarketBtn,
-            this.recruitBtn, this.troopPrevBtn, this.troopNextBtn, this.sendTroopsBtn,
+            this.recruitPrevBtn, this.recruitNextBtn, this.recruitBtn,
+            this.troopPrevBtn, this.troopNextBtn, this.sendTroopsBtn,
             this.autoRecruitToggleBtn,
             this.batchUpgradeAllBtn, this.batchUpgradeFortressBtn, this.batchUpgradeMarketBtn,
         ];

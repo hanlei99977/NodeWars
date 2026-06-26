@@ -21,35 +21,33 @@ export class RecruitEvent {
 // 征兵系统，负责征兵队列管理、训练进度推进和结算，纯逻辑层
 export class RecruitSystem {
 
-    // 在指定节点上发起一次征兵（100金币=100士兵）
-    // 返回事件供外层做UI反馈，null表示发起成功但无需事件
-    static startRecruit(node: NodeEntity, ownerId: string): RecruitEvent {
-        // 检查队列是否已满
+    // 在指定节点上发起征兵（count 士兵，count 金币）
+    static startRecruit(node: NodeEntity, ownerId: string, count: number = RecruitConfig.SOLDIER_COUNT): RecruitEvent {
+        if (count <= 0) return new RecruitEvent(RecruitEventType.INSUFFICIENT_GOLD, node.id);
+
+        const cost = count;
+
         if (node.recruitQueue.length >= RecruitConfig.MAX_QUEUE_PER_NODE) {
             return new RecruitEvent(RecruitEventType.QUEUE_FULL, node.id);
         }
 
-        // 检查金币是否足够
-        if (!EconomySystem.canAfford(ownerId, RecruitConfig.GOLD_COST)) {
+        if (!EconomySystem.canAfford(ownerId, cost)) {
             return new RecruitEvent(RecruitEventType.INSUFFICIENT_GOLD, node.id);
         }
 
-        // 扣减金币（先扣后练，节点攻占时不返还）
-        EconomySystem.spend(ownerId, RecruitConfig.GOLD_COST);
+        EconomySystem.spend(ownerId, cost);
 
-        // 计算实际训练时间：基础时间 × (1-军营缩减) × 战争动员加速系数
-        const baseTime = RecruitConfig.TIME;
+        const baseTimePerSoldier = RecruitConfig.TIME / RecruitConfig.SOLDIER_COUNT;
         const reduction = node.specialType === SpecialNodeType.BARRACKS
             ? (NodeConfig.SPECIAL_RECRUIT_TIME_REDUCTION[SpecialNodeType.BARRACKS] || 0)
             : 0;
         const mobilizationMultiplier = EventSystem.getWarMobilizationMultiplier(ownerId);
-        const actualTime = baseTime * (1 - reduction) * mobilizationMultiplier;
+        const actualTime = baseTimePerSoldier * count * (1 - reduction) * mobilizationMultiplier;
 
-        // 创建征兵任务加入队列
-        const task = new RecruitTask(RecruitConfig.SOLDIER_COUNT, actualTime);
+        const task = new RecruitTask(count, actualTime);
         node.recruitQueue.push(task);
 
-        return new RecruitEvent(RecruitEventType.STARTED, node.id, RecruitConfig.SOLDIER_COUNT);
+        return new RecruitEvent(RecruitEventType.STARTED, node.id, count);
     }
 
     // 每帧推进所有节点的征兵队列，传入逻辑时间增量 dt 秒
