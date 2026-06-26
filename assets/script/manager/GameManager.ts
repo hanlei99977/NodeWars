@@ -296,6 +296,9 @@ export class GameManager extends Component {
 
         // --- 11. 自动保存 ---
         this.autoSave();
+
+        // --- 12. 实时刷新活跃面板 ---
+        this.refreshActivePanels();
     }
 
     // 军队到达节点：NodeBattleSystem 结算攻占 / 合并
@@ -545,6 +548,7 @@ export class GameManager extends Component {
 
     // 清除旧地图
     private clearMap(): void {
+        console.log(`开始清除旧地图数据...`);
         this._armyViewNodes.forEach(n => n.destroy());
         this._armyViewNodes.clear();
         this._edgeNodes.forEach(n => n.destroy());
@@ -561,6 +565,7 @@ export class GameManager extends Component {
         this._nodeOwnerLabels = [];
         this._isDragging = false;
         this._dragLastPos = null;
+        console.log(`清除成功`);
     }
 
     // 创建一条线段的视觉节点（可点击弹出 EdgePanel）
@@ -898,6 +903,12 @@ export class GameManager extends Component {
         if (this.nodePanel) this.nodePanel.node.active = false;
         if (this.edgePanel) this.edgePanel.node.active = false;
         if (this.armyPanel) this.armyPanel.node.active = false;
+    }
+
+    private refreshActivePanels(): void {
+        if (this.nodePanel && this.nodePanel.node.active) this.nodePanel.refreshPanel();
+        if (this.edgePanel && this.edgePanel.node.active) this.edgePanel.refresh();
+        if (this.armyPanel && this.armyPanel.node.active) this.armyPanel.refresh();
     }
 
     private _dispatchTroops(srcNodeId: number, count: number, targetNodeId: number): void {

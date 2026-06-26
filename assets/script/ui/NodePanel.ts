@@ -168,7 +168,7 @@ export class NodePanel extends Component {
         this.refreshRecruitButton();
 
         // 派兵
-        this._troopCount = 0;
+        this._troopCount = Math.min(this._troopCount, this._maxTroops);
         this._maxTroops = this._entity.garrisonCount;
         this.updateTroopLabel();
 
