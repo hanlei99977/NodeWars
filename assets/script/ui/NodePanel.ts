@@ -1,7 +1,9 @@
-import { _decorator, Component, Label, Button } from 'cc';
+import { _decorator, Component, Label, Button, Graphics, Color, UITransform } from 'cc';
 import { NodeEntity } from '../entity/NodeEntity';
 import { NodeLevel, NodeType, SpecialNodeType, OwnerType, UpgradeTaskState, ConvertTaskState, RecruitTaskState } from '../config/EnumDefine';
 import { NodeConfig } from '../config/NodeConfig';
+import { EventBus } from '../common/EventBus';
+import { GameEvents } from '../common/GameEvents';
 
 const { ccclass, property } = _decorator;
 
@@ -120,17 +122,6 @@ export class NodePanel extends Component {
     private _maxTroops: number = 0;
     private _recruitCount: number = 0;
 
-    // 外部回调（由 GameManager 之类的外层绑定，处理实际逻辑）
-    onUpgrade: ((nodeId: number) => void) | null = null;
-    onConvertToFortress: ((nodeId: number) => void) | null = null;
-    onConvertToMarket: ((nodeId: number) => void) | null = null;
-    onRecruit: ((nodeId: number, count: number) => void) | null = null;
-    onSendTroops: ((nodeId: number, count: number) => void) | null = null;
-    onClose: (() => void) | null = null;
-    onBatchUpgradeAll: (() => void) | null = null;
-    onBatchUpgradeFortress: (() => void) | null = null;
-    onBatchUpgradeMarket: (() => void) | null = null;
-
     // 绑定节点数据并刷新面板
     bindToEntity(entity: NodeEntity, ownerId: string): void {
         this._entity = entity;
@@ -221,9 +212,8 @@ export class NodePanel extends Component {
     // 派兵按钮点击回调
     onSendTroopsClicked(): void {
         console.log(`[NodePanel] 派兵: 节点#${this._entity?.id} 数量=${this._troopCount}`);
-        if (!this._entity) return;
-        if (this._troopCount > 0 && this.onSendTroops) {
-            this.onSendTroops(this._entity.id, this._troopCount);
+        if (this._entity && this._troopCount > 0) {
+            EventBus.emit(GameEvents.NODE_SEND_TROOPS, this._entity.id, this._troopCount);
         }
     }
 
@@ -244,25 +234,19 @@ export class NodePanel extends Component {
     // 升级按钮点击
     onUpgradeClicked(): void {
         console.log(`[NodePanel] 升级: 节点#${this._entity?.id}`);
-        if (this._entity && this.onUpgrade) {
-            this.onUpgrade(this._entity.id);
-        }
+        if (this._entity) EventBus.emit(GameEvents.NODE_UPGRADE, this._entity.id);
     }
 
     // 转为要塞
     onConvertToFortressClicked(): void {
         console.log(`[NodePanel] 转要塞: 节点#${this._entity?.id}`);
-        if (this._entity && this.onConvertToFortress) {
-            this.onConvertToFortress(this._entity.id);
-        }
+        if (this._entity) EventBus.emit(GameEvents.NODE_CONVERT_FORTRESS, this._entity.id);
     }
 
     // 转为市场
     onConvertToMarketClicked(): void {
         console.log(`[NodePanel] 转市场: 节点#${this._entity?.id}`);
-        if (this._entity && this.onConvertToMarket) {
-            this.onConvertToMarket(this._entity.id);
-        }
+        if (this._entity) EventBus.emit(GameEvents.NODE_CONVERT_MARKET, this._entity.id);
     }
 
     // 征兵数量 -10
@@ -282,33 +266,33 @@ export class NodePanel extends Component {
     // 征兵按钮点击
     onRecruitBtnClicked(): void {
         console.log(`[NodePanel] 征兵: 节点#${this._entity?.id} 数量=${this._recruitCount}`);
-        if (this._entity && this._recruitCount > 0 && this.onRecruit) {
-            this.onRecruit(this._entity.id, this._recruitCount);
+        if (this._entity && this._recruitCount > 0) {
+            EventBus.emit(GameEvents.NODE_RECRUIT, this._entity.id, this._recruitCount);
         }
     }
 
     // 关闭面板
     onCloseClicked(): void {
         console.log(`[NodePanel] 关闭`);
-        if (this.onClose) this.onClose();
+        EventBus.emit(GameEvents.PANEL_CLOSE_NODE);
     }
 
     // 批量升级所有
     onBatchUpgradeAllClicked(): void {
         console.log(`[NodePanel] 批量升级全部`);
-        if (this.onBatchUpgradeAll) this.onBatchUpgradeAll();
+        EventBus.emit(GameEvents.NODE_BATCH_UPGRADE_ALL);
     }
 
     // 批量升级所有要塞
     onBatchUpgradeFortressClicked(): void {
         console.log(`[NodePanel] 批量升级要塞`);
-        if (this.onBatchUpgradeFortress) this.onBatchUpgradeFortress();
+        EventBus.emit(GameEvents.NODE_BATCH_UPGRADE_FORTRESS);
     }
 
     // 批量升级所有市场
     onBatchUpgradeMarketClicked(): void {
         console.log(`[NodePanel] 批量升级市场`);
-        if (this.onBatchUpgradeMarket) this.onBatchUpgradeMarket();
+        EventBus.emit(GameEvents.NODE_BATCH_UPGRADE_MARKET);
     }
 
     // 自动征兵阈值 -100

@@ -1,7 +1,9 @@
-import { _decorator, Component, Label, Button } from 'cc';
+import { _decorator, Component, Label, Button, Graphics, Color, UITransform } from 'cc';
 import { EdgeEntity } from '../entity/EdgeEntity';
 import { EdgeLevel } from '../config/EnumDefine';
 import { EdgeConfig } from '../config/EdgeConfig';
+import { EventBus } from '../common/EventBus';
+import { GameEvents } from '../common/GameEvents';
 
 const { ccclass, property } = _decorator;
 
@@ -28,9 +30,6 @@ export class EdgePanel extends Component {
 
     @property(Button)
     closeBtn: Button | null = null;
-
-    onUpgrade: ((edgeId: number) => void) | null = null;
-    onClose: (() => void) | null = null;
 
     private _edge: EdgeEntity | null = null;
 
@@ -66,14 +65,14 @@ export class EdgePanel extends Component {
     }
 
     onUpgradeClicked(): void {
-        if (this._edge && this.onUpgrade) {
+        if (this._edge) {
             console.log(`[EdgePanel] 升级: 线路#${this._edge.id}`);
-            this.onUpgrade(this._edge.id);
+            EventBus.emit(GameEvents.EDGE_UPGRADE, this._edge.id);
         }
     }
 
     onCloseClicked(): void {
         console.log(`[EdgePanel] 关闭`);
-        if (this.onClose) this.onClose();
+        EventBus.emit(GameEvents.PANEL_CLOSE_EDGE);
     }
 }

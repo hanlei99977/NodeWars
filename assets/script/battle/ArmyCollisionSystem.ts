@@ -1,5 +1,7 @@
 import { ArmyEntity } from '../entity/ArmyEntity';
 import { ArmyState } from '../config/EnumDefine';
+import { EventBus } from '../common/EventBus';
+import { GameEvents } from '../common/GameEvents';
 
 // 线路遭遇战结果
 export class EdgeBattleResult {
@@ -19,22 +21,23 @@ export class ArmyCollisionSystem {
 
     // 处理两军在一对一遭遇战（较大军队消灭较小军队，剩余军队继续前进）
     static resolve(armyA: ArmyEntity, armyB: ArmyEntity): EdgeBattleResult | null {
-        // 任一军队已阵亡或不在移动中，视为无效
         if (armyA.soldierCount <= 0 || armyB.soldierCount <= 0) return null;
         if (armyA.state !== ArmyState.MOVING || armyB.state !== ArmyState.MOVING) return null;
 
         console.log(`[EdgeBattle] 线路遭遇: 军队#${armyA.id}(${armyA.ownerId}) ${armyA.soldierCount}人 VS 军队#${armyB.id}(${armyB.ownerId}) ${armyB.soldierCount}人`);
 
+        let result: EdgeBattleResult;
         if (armyA.soldierCount > armyB.soldierCount) {
-            return ArmyCollisionSystem.doBattle(armyA, armyB);
+            result = ArmyCollisionSystem.doBattle(armyA, armyB);
         } else if (armyB.soldierCount > armyA.soldierCount) {
-            return ArmyCollisionSystem.doBattle(armyB, armyA);
+            result = ArmyCollisionSystem.doBattle(armyB, armyA);
+        } else {
+            armyA.soldierCount = 0;
+            armyB.soldierCount = 0;
+            result = new EdgeBattleResult(armyA, armyB, 0);
         }
-        // 兵力相等时双方同归于尽，指定armyA为名义"胜方"但剩余为0
-        console.log(`[EdgeBattle] 同归于尽: 双方各${armyA.soldierCount}人, 全部阵亡`);
-        armyA.soldierCount = 0;
-        armyB.soldierCount = 0;
-        return new EdgeBattleResult(armyA, armyB, 0);
+        EventBus.emit(GameEvents.BATTLE_EDGE_RESULT, result);
+        return result;
     }
 
     // 多条军队同时相遇时，按相遇时间逐次两两处理

@@ -1,6 +1,8 @@
 import { _decorator, Component, Label, Button } from 'cc';
 import { GameState, GameSpeed, OwnerType, AIAllianceState } from '../config/EnumDefine';
 import { EconomySystem } from '../economy/EconomySystem';
+import { EventBus } from '../common/EventBus';
+import { GameEvents } from '../common/GameEvents';
 
 const { ccclass, property } = _decorator;
 
@@ -45,10 +47,6 @@ export class HUDController extends Component {
     @property(Button)
     speedNextBtn: Button | null = null;
 
-    // 外部回调
-    onPauseToggle: (() => void) | null = null;
-    onSpeedChange: ((speed: GameSpeed) => void) | null = null;
-
     private _currentSpeed = GameSpeed.X1;
 
     // 绑定外部数据刷新 HUD（由外层每帧调用）
@@ -66,7 +64,7 @@ export class HUDController extends Component {
 
     onPauseClicked(): void {
         console.log(`[HUD] 暂停/继续`);
-        if (this.onPauseToggle) this.onPauseToggle();
+        EventBus.emit(GameEvents.GAME_PAUSE_TOGGLE);
     }
 
     onSpeedPrev(): void {
@@ -75,7 +73,7 @@ export class HUDController extends Component {
         const next = speeds[(idx - 1 + speeds.length) % speeds.length];
         console.log(`[HUD] 速度: ${this._currentSpeed}x → ${next}x`);
         this._currentSpeed = next;
-        if (this.onSpeedChange) this.onSpeedChange(next);
+        EventBus.emit(GameEvents.GAME_SPEED_CHANGED, next);
         this.refreshSpeed();
     }
 
@@ -85,7 +83,7 @@ export class HUDController extends Component {
         const next = speeds[(idx + 1) % speeds.length];
         console.log(`[HUD] 速度: ${this._currentSpeed}x → ${next}x`);
         this._currentSpeed = next;
-        if (this.onSpeedChange) this.onSpeedChange(next);
+        EventBus.emit(GameEvents.GAME_SPEED_CHANGED, next);
         this.refreshSpeed();
     }
 

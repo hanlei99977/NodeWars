@@ -2,11 +2,11 @@ import { _decorator, Component, director, Node, Graphics, Color, Label, UITransf
 import { NodeEntity } from '../entity/NodeEntity';
 import { EdgeEntity } from '../entity/EdgeEntity';
 import { ArmyEntity } from '../entity/ArmyEntity';
-import { GameState, MapSize, Difficulty, FogMode, GameSpeed, OwnerType, ArmyState, ArmyEventType, EconomyEventType, NodeBattleOutcome, AIAllianceState, NodeType } from '../config/EnumDefine';
+import { GameState, MapSize, Difficulty, FogMode, GameSpeed, OwnerType, ArmyState, NodeBattleOutcome, AIAllianceState, NodeType } from '../config/EnumDefine';
 import { GameConfig } from '../config/GameConfig';
 import { MapGenerator, MapGenerateResult } from '../map/MapGenerator';
 import { ArmyManager } from '../manager/ArmyManager';
-import { NodeBattleSystem } from '../battle/NodeBattleSystem';
+import { NodeBattleSystem, NodeBattleResult } from '../battle/NodeBattleSystem';
 import { ArmyCollisionSystem } from '../battle/ArmyCollisionSystem';
 import { EconomySystem } from '../economy/EconomySystem';
 import { RecruitSystem } from '../recruit/RecruitSystem';
@@ -24,6 +24,8 @@ import { NewGameConfig } from '../ui/LobbyUI';
 import { NodePanel } from '../ui/NodePanel';
 import { EdgePanel } from '../ui/EdgePanel';
 import { ArmyPanel } from '../ui/ArmyPanel';
+import { EventBus } from '../common/EventBus';
+import { GameEvents } from '../common/GameEvents';
 
 const { ccclass, property } = _decorator;
 
@@ -237,41 +239,22 @@ export class GameManager extends Component {
         const logicDt = dt * this._gameSpeed;
         this._totalTime += logicDt;
 
-        // --- 1. 行军推进 ---
-        const armyEvents = ArmyManager.update(logicDt);
+        // --- 1. 行军推进（事件通过 EventBus 发送） ---
+        ArmyManager.update(logicDt);
         this._armies = ArmyManager.armies;
 
-        // 处理行军事件
-        for (const event of armyEvents) {
-            console.log(`[GameManager] 行军事件: type=${event.type}, armyId=${event.army.id}, nodeId=${event.nodeId}, otherArmyId=${event.otherArmy?.id}`);
-            if (event.type === ArmyEventType.ARRIVED_AT_NODE && event.nodeId !== undefined) {
-                this.handleArmyArrival(event.army, event.nodeId);
-            } else if (event.type === ArmyEventType.EDGE_ENCOUNTER && event.otherArmy) {
-                this.handleEdgeEncounter(event.army, event.otherArmy);
-            }
-        }
-
-        // --- 2. 经济更新 ---
-        const econEvents = EconomySystem.update(logicDt, this._nodes, this._armies);
-        for (const event of econEvents) {
-            if (event.type === EconomyEventType.DISBAND_SOLDIERS) {
-                // 裁军已完成（EconomySystem 内直接修改了节点数据）
-                // 此处仅需刷新视图
-            }
-        }
+        // --- 2. 经济更新（事件通过 EventBus 发送） ---
+        EconomySystem.update(logicDt, this._nodes, this._armies);
 
         // --- 3. 任务推进（征兵 / 节点升级 / 节点转换） ---
-        const recruitEvents = RecruitSystem.update(logicDt, this._nodes);
-        const upgradeEvents = NodeUpgradeSystem.update(logicDt, this._nodes);
-        const convertEvents = NodeConvertSystem.update(logicDt, this._nodes);
-
-        // 征兵完成 → 记录迷雾情报（己方节点兵力变化，FogSystem.update 会刷新）
-        // 升级/转换完成 → FogSystem.refreshVisibility 会自动拉取最新数据
+        RecruitSystem.update(logicDt, this._nodes);
+        NodeUpgradeSystem.update(logicDt, this._nodes);
+        NodeConvertSystem.update(logicDt, this._nodes);
 
         // --- 4. 迷雾更新 ---
         FogSystem.update(logicDt, this._nodes);
 
-        // --- 5. 随机事件 ---
+        // --- 5. 随机事件（事件通过 EventBus 发送） ---
         EventSystem.updateNodes(this._nodes);
         EventSystem.update(logicDt, EconomySystem.allOwnerIds);
 
@@ -312,12 +295,7 @@ export class GameManager extends Component {
         const isFinalDest = nodeId === army.destinationNodeId;
 
         if (isFinalDest) {
-            // 最终目标节点：无论友方还是敌方都结算
-            console.log(`[GameManager] 军队#${army.id} 到达最终目标节点#${nodeId} (owner=${node.ownerId}, garrison=${node.garrisonCount})`);
-            const result = NodeBattleSystem.resolve(army, node);
-            if (result.outcome === NodeBattleOutcome.ATTACKER_WINS || result.outcome === NodeBattleOutcome.DEFENDER_WINS) {
-                FogSystem.recordAttack(node, army.ownerId);
-            }
+            NodeBattleSystem.resolve(army, node);
             return;
         }
 
@@ -328,11 +306,7 @@ export class GameManager extends Component {
             return;
         }
 
-        console.log(`[GameManager] 军队#${army.id} 遭遇敌方中间节点#${nodeId} (owner=${node.ownerId}, garrison=${node.garrisonCount})`);
-        const result = NodeBattleSystem.resolve(army, node);
-        if (result.outcome === NodeBattleOutcome.ATTACKER_WINS || result.outcome === NodeBattleOutcome.DEFENDER_WINS) {
-            FogSystem.recordAttack(node, army.ownerId);
-        }
+        NodeBattleSystem.resolve(army, node);
     }
 
     // 军队线路上遭遇：ArmyCollisionSystem 结算
@@ -415,25 +389,103 @@ export class GameManager extends Component {
 
     // 连接 HUD / SaveSlotsUI / GameOverUI 的回调
     private wireUI(): void {
-        if (this.hud) {
-            this.hud.onPauseToggle = () => this.togglePause();
-            this.hud.onSpeedChange = (s) => {
-                this.setGameSpeed(s);
-                if (this.hud) this.hud.bindSpeed(s);
-            };
-        }
+        EventBus.removeAll();
 
-        if (this.saveSlotsUI) {
-            this.saveSlotsUI.onLoadSlot = (slotId) => this.loadGame(slotId);
-            this.saveSlotsUI.onClose = () => {
-                if (this.saveSlotsUI) this.saveSlotsUI.node.active = false;
-            };
-        }
+        EventBus.on(GameEvents.NODE_UPGRADE, (nodeId: number) => {
+            NodeUpgradeSystem.startUpgrade(this._nodes[nodeId], OwnerType.PLAYER);
+            this.refreshMapViews();
+            if (this.nodePanel) this.nodePanel.refreshPanel();
+        });
+        EventBus.on(GameEvents.NODE_CONVERT_FORTRESS, (nodeId: number) => {
+            NodeConvertSystem.startConvert(this._nodes[nodeId], NodeType.FORTRESS, OwnerType.PLAYER);
+            this.refreshMapViews();
+            if (this.nodePanel) this.nodePanel.refreshPanel();
+        });
+        EventBus.on(GameEvents.NODE_CONVERT_MARKET, (nodeId: number) => {
+            NodeConvertSystem.startConvert(this._nodes[nodeId], NodeType.MARKET, OwnerType.PLAYER);
+            this.refreshMapViews();
+            if (this.nodePanel) this.nodePanel.refreshPanel();
+        });
+        EventBus.on(GameEvents.NODE_RECRUIT, (nodeId: number, count: number) => {
+            RecruitSystem.startRecruit(this._nodes[nodeId], OwnerType.PLAYER, count);
+            this.refreshMapViews();
+            if (this.nodePanel) this.nodePanel.refreshPanel();
+        });
+        EventBus.on(GameEvents.NODE_SEND_TROOPS, (nodeId: number, count: number) => {
+            const srcNode = this._nodes[nodeId];
+            if (count <= 0 || count > srcNode.garrisonCount) return;
+            this._pendingSendTroops = { nodeId, count };
+            if (this.nodePanel) this.nodePanel.node.active = false;
+        });
+        EventBus.on(GameEvents.NODE_BATCH_UPGRADE_ALL, () => {
+            NodeUpgradeSystem.batchUpgrade(this._nodes, 'all', OwnerType.PLAYER, ArmyManager.adjList);
+            this.refreshMapViews();
+            if (this.nodePanel) this.nodePanel.refreshPanel();
+        });
+        EventBus.on(GameEvents.NODE_BATCH_UPGRADE_FORTRESS, () => {
+            NodeUpgradeSystem.batchUpgrade(this._nodes, 'fortress', OwnerType.PLAYER, ArmyManager.adjList);
+            this.refreshMapViews();
+            if (this.nodePanel) this.nodePanel.refreshPanel();
+        });
+        EventBus.on(GameEvents.NODE_BATCH_UPGRADE_MARKET, () => {
+            NodeUpgradeSystem.batchUpgrade(this._nodes, 'market', OwnerType.PLAYER, ArmyManager.adjList);
+            this.refreshMapViews();
+            if (this.nodePanel) this.nodePanel.refreshPanel();
+        });
+        EventBus.on(GameEvents.PANEL_CLOSE_NODE, () => {
+            if (this.nodePanel) this.nodePanel.node.active = false;
+        });
 
-        if (this.gameOverUI) {
-            this.gameOverUI.onRestart = () => director.loadScene('LobbyScene');
-            this.gameOverUI.onBackToLobby = () => director.loadScene('LobbyScene');
-        }
+        EventBus.on(GameEvents.EDGE_UPGRADE, (edgeId: number) => {
+            const edge = this._edges.find(e => e.id === edgeId);
+            if (!edge) return;
+            EdgeUpgradeSystem.upgradeEdge(edge, this._nodes, OwnerType.PLAYER);
+            if (this.edgePanel) this.edgePanel.refresh();
+            this.refreshMapViews();
+        });
+        EventBus.on(GameEvents.PANEL_CLOSE_EDGE, () => {
+            if (this.edgePanel) this.edgePanel.node.active = false;
+        });
+
+        EventBus.on(GameEvents.PANEL_CLOSE_ARMY, () => {
+            if (this.armyPanel) this.armyPanel.node.active = false;
+        });
+
+        EventBus.on(GameEvents.GAME_RESTART, () => director.loadScene('LobbyScene'));
+        EventBus.on(GameEvents.GAME_LOBBY,   () => director.loadScene('LobbyScene'));
+
+        EventBus.on(GameEvents.SAVE_LOAD_SLOT, (slotId: number) => this.loadGame(slotId));
+        EventBus.on(GameEvents.SAVE_SLOTS_CLOSE, () => {
+            if (this.saveSlotsUI) this.saveSlotsUI.node.active = false;
+        });
+
+        EventBus.on(GameEvents.GAME_PAUSE_TOGGLE, () => this.togglePause());
+        EventBus.on(GameEvents.GAME_SPEED_CHANGED, (s: GameSpeed) => {
+            this.setGameSpeed(s);
+            if (this.hud) this.hud.bindSpeed(s);
+        });
+
+        EventBus.on(GameEvents.ARMY_ARRIVED_AT_NODE, (army: ArmyEntity, nodeId: number) => {
+            this.handleArmyArrival(army, nodeId);
+            this._armies = ArmyManager.armies;
+        });
+        EventBus.on(GameEvents.ARMY_EDGE_ENCOUNTER, (armyA: ArmyEntity, armyB: ArmyEntity) => {
+            this.handleEdgeEncounter(armyA, armyB);
+            this._armies = ArmyManager.armies;
+        });
+
+        EventBus.on(GameEvents.BATTLE_NODE_RESULT, (result: NodeBattleResult) => {
+            if (result.outcome === NodeBattleOutcome.ATTACKER_WINS || result.outcome === NodeBattleOutcome.DEFENDER_WINS) {
+                FogSystem.recordAttack(result.node, result.attackerArmy.ownerId);
+            }
+        });
+
+        EventBus.on(GameEvents.RANDOM_HARVEST, (totalGold: number) => {
+            console.log(`[GameManager] 丰收! 金币 +${totalGold}`);
+        });
+        EventBus.on(GameEvents.RANDOM_WAR_MOBILIZATION, (duration: number) => {
+            console.log(`[GameManager] 战争动员! 所有方征兵时间减半 ${duration.toFixed(1)}s`);
+        });
     }
 
     // --- 外部只读查询 ---
@@ -684,59 +736,6 @@ export class GameManager extends Component {
         this.nodePanel.bindToEntity(node, OwnerType.PLAYER);
         this.nodePanel.node.active = true;
 
-        const refreshAfter = () => {
-            this.refreshMapViews();
-            if (this.nodePanel) this.nodePanel.refreshPanel();
-        };
-
-        // 绑定回调
-        this.nodePanel.onUpgrade = (id) => {
-            console.log(`[GameManager] 节点升级: #${id}`);
-            NodeUpgradeSystem.startUpgrade(this._nodes[id], OwnerType.PLAYER);
-            refreshAfter();
-        };
-        this.nodePanel.onConvertToFortress = (id) => {
-            console.log(`[GameManager] 节点转要塞: #${id}`);
-            NodeConvertSystem.startConvert(this._nodes[id], NodeType.FORTRESS, OwnerType.PLAYER);
-            refreshAfter();
-        };
-        this.nodePanel.onConvertToMarket = (id) => {
-            console.log(`[GameManager] 节点转市场: #${id}`);
-            NodeConvertSystem.startConvert(this._nodes[id], NodeType.MARKET, OwnerType.PLAYER);
-            refreshAfter();
-        };
-        this.nodePanel.onRecruit = (id, count) => {
-            console.log(`[GameManager] 节点征兵: #${id} 数量=${count}`);
-            RecruitSystem.startRecruit(this._nodes[id], OwnerType.PLAYER, count);
-            refreshAfter();
-        };
-
-        this.nodePanel.onSendTroops = (id, count) => {
-            const srcNode = this._nodes[id];
-            if (count <= 0 || count > srcNode.garrisonCount) return;
-
-            console.log(`[GameManager] 待派兵: 节点#${id}, 数量=${count} — 点击目标节点`);
-            this._pendingSendTroops = { nodeId: id, count };
-            if (this.nodePanel) this.nodePanel.node.active = false;
-        };
-
-        this.nodePanel.onClose = () => { if (this.nodePanel) this.nodePanel.node.active = false; };
-        this.nodePanel.onBatchUpgradeAll = () => {
-            console.log(`[GameManager] 批量升级全部`);
-            NodeUpgradeSystem.batchUpgrade(this._nodes, 'all', OwnerType.PLAYER, ArmyManager.adjList);
-            refreshAfter();
-        };
-        this.nodePanel.onBatchUpgradeFortress = () => {
-            console.log(`[GameManager] 批量升级要塞`);
-            NodeUpgradeSystem.batchUpgrade(this._nodes, 'fortress', OwnerType.PLAYER, ArmyManager.adjList);
-            refreshAfter();
-        };
-        this.nodePanel.onBatchUpgradeMarket = () => {
-            console.log(`[GameManager] 批量升级市场`);
-            NodeUpgradeSystem.batchUpgrade(this._nodes, 'market', OwnerType.PLAYER, ArmyManager.adjList);
-            refreshAfter();
-        };
-
         this.refreshMapViews();
     }
 
@@ -869,17 +868,6 @@ export class GameManager extends Component {
         this._closeAllPanels();
         this.edgePanel.bindToEntity(edge);
         this.edgePanel.node.active = true;
-
-        this.edgePanel.onUpgrade = () => {
-            console.log(`[GameManager] 线路升级: #${edge.id}`);
-            EdgeUpgradeSystem.upgradeEdge(edge, this._nodes, OwnerType.PLAYER);
-            this.edgePanel!.refresh();
-            this.refreshMapViews();
-        };
-
-        this.edgePanel.onClose = () => {
-            if (this.edgePanel) this.edgePanel.node.active = false;
-        };
     }
 
     // 点击军队 → ArmyPanel 或进入改道模式
@@ -887,22 +875,18 @@ export class GameManager extends Component {
         if (!this.armyPanel) return;
         const army = this._armies.find(a => a.id === armyId);
         if (!army) return;
-        console.log(`[GameManager] 点击军队#${armyId} (owner=${army.ownerId}, count=${army.soldierCount}, state=${ArmyState[army.state]})`);
+
         if (army.ownerId !== OwnerType.PLAYER) return;
 
         if (army.state === ArmyState.MOVING) {
             console.log(`[GameManager] 待改道: 军队#${armyId} — 点击目标节点`);
             this._pendingArmyRedirect = { armyId };
+            return;
         }
 
         this._closeAllPanels();
-        console.log(`[GameManager] 弹出军队面板: 军队#${armyId}`);
         this.armyPanel.bindToEntity(army);
         this.armyPanel.node.active = true;
-
-        this.armyPanel.onClose = () => {
-            if (this.armyPanel) this.armyPanel.node.active = false;
-        };
     }
 
     private _cancelPendingModes(): void {

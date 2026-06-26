@@ -1,6 +1,8 @@
-import { _decorator, Component, Label, Button } from 'cc';
+import { _decorator, Component, Label, Button, Graphics, Color, UITransform } from 'cc';
 import { ArmyEntity } from '../entity/ArmyEntity';
 import { OwnerType } from '../config/EnumDefine';
+import { EventBus } from '../common/EventBus';
+import { GameEvents } from '../common/GameEvents';
 
 const { ccclass, property } = _decorator;
 
@@ -25,8 +27,6 @@ export class ArmyPanel extends Component {
 
     @property(Button)
     closeBtn: Button | null = null;
-
-    onClose: (() => void) | null = null;
 
     private _army: ArmyEntity | null = null;
 
@@ -68,6 +68,6 @@ export class ArmyPanel extends Component {
 
     onCloseClicked(): void {
         console.log(`[ArmyPanel] 关闭`);
-        if (this.onClose) this.onClose();
+        EventBus.emit(GameEvents.PANEL_CLOSE_ARMY);
     }
 }

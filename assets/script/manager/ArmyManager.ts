@@ -1,22 +1,11 @@
 import { ArmyEntity } from '../entity/ArmyEntity';
 import { EdgeEntity } from '../entity/EdgeEntity';
 import { NodeEntity } from '../entity/NodeEntity';
-import { OwnerType, ArmyState, ArmyEventType } from '../config/EnumDefine';
+import { OwnerType, ArmyState } from '../config/EnumDefine';
 import { ArmyConfig } from '../config/ArmyConfig';
 import { EdgeConfig } from '../config/EdgeConfig';
-
-// 行军事件数据
-export class ArmyEvent {
-    type: ArmyEventType;
-    army: ArmyEntity;                       // 相关军队
-    nodeId?: number;                        // 到达事件的目标节点ID
-    otherArmy?: ArmyEntity;                 // 遭遇事件中的另一方
-
-    constructor(type: ArmyEventType, army: ArmyEntity) {
-        this.type = type;
-        this.army = army;
-    }
-}
+import { EventBus } from '../common/EventBus';
+import { GameEvents } from '../common/GameEvents';
 
 // 行军管理器，负责军队创建、每帧行军推进、路径查找、改道、分兵，纯逻辑层
 export class ArmyManager {
@@ -78,9 +67,8 @@ export class ArmyManager {
         console.log(`[ArmyManager] 军队#${armyId} 越过己方节点#${army.currentNodeId}，进入边 ${army.currentNodeId}→${army.nextNodeId}`);
     }
 
-    // 每帧行军推进（传入逻辑时间增量 dt 秒），返回本帧产生的事件列表
-    static update(dt: number): ArmyEvent[] {
-        const events: ArmyEvent[] = [];
+    // 每帧行军推进（传入逻辑时间增量 dt 秒），事件通过 EventBus 发送
+    static update(dt: number): void {
         const toRemove: number[] = [];
         // 更新每支军队的状态
         for (const army of ArmyManager._armies) {
@@ -112,7 +100,7 @@ export class ArmyManager {
                 army.progress = 1;
                 const arrivedNodeId = army.nextNodeId;
 
-                events.push(ArmyManager.makeEvent(ArmyEventType.ARRIVED_AT_NODE, army, arrivedNodeId));
+                EventBus.emit(GameEvents.ARMY_ARRIVED_AT_NODE, army, arrivedNodeId);
 
                 if (army.destinationNodeId === arrivedNodeId) {
                     // 到达最终终点，标记移除
@@ -129,11 +117,7 @@ export class ArmyManager {
             ArmyManager.removeArmy(id);
         }
 
-        // 检测同边相遇（双向可能在同一条边上相遇）
-        const encounterEvents = ArmyManager.checkEdgeEncounters();
-        events.push(...encounterEvents);
-
-        return events;
+        ArmyManager.checkEdgeEncountersAndEmit();
     }
 
     // 获取所有活跃军队
@@ -296,10 +280,8 @@ export class ArmyManager {
         army.pendingDestinationNodeId = null;
     }
 
-    // 检测同一条边上是否有两军相遇，根据行进方向和进度精确判断是否发生战斗
-    // 同向：进度差 < 0.05（几乎重叠）｜反向：进度之和 > 0.95（即将交错）
-    private static checkEdgeEncounters(): ArmyEvent[] {
-        const events: ArmyEvent[] = [];
+    // 检测同一条边上是否有两军相遇，触发 EventBus 事件
+    private static checkEdgeEncountersAndEmit(): void {
         const visited = new Set<string>();
         const FORWARD_ENCOUNTER_THRESHOLD = 0.05;
         const BACKWARD_ENCOUNTER_THRESHOLD = 0.95;
@@ -332,25 +314,9 @@ export class ArmyManager {
                     if (!shouldFight) continue;
                     visited.add(key);
 
-                    // 双方在同一条边上且满足遭遇条件，触发遭遇战
-                    events.push(ArmyManager.makeEncounterEvent(a, b));
+                    EventBus.emit(GameEvents.ARMY_EDGE_ENCOUNTER, a, b);
                 }
             }
         }
-        return events;
-    }
-
-    // 构造节点到达事件
-    private static makeEvent(type: ArmyEventType, army: ArmyEntity, nodeId?: number): ArmyEvent {
-        const event = new ArmyEvent(type, army);
-        event.nodeId = nodeId;
-        return event;
-    }
-
-    // 构造遭遇战事件
-    private static makeEncounterEvent(armyA: ArmyEntity, armyB: ArmyEntity): ArmyEvent {
-        const event = new ArmyEvent(ArmyEventType.EDGE_ENCOUNTER, armyA);
-        event.otherArmy = armyB;
-        return event;
     }
 }

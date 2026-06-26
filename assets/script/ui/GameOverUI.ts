@@ -1,5 +1,7 @@
-import { _decorator, Component, Label, Button } from 'cc';
+import { _decorator, Component, Label, Button, Graphics, Color, UITransform } from 'cc';
 import { GameState } from '../config/EnumDefine';
+import { EventBus } from '../common/EventBus';
+import { GameEvents } from '../common/GameEvents';
 
 const { ccclass, property } = _decorator;
 
@@ -21,10 +23,6 @@ export class GameOverUI extends Component {
 
     @property(Button)
     lobbyBtn: Button | null = null;
-
-    // 外部回调
-    onRestart: (() => void) | null = null;
-    onBackToLobby: (() => void) | null = null;
 
     show(state: GameState, totalTime: number, nodeCount: number, reward: number): void {
         this.node.active = true;
@@ -48,11 +46,11 @@ export class GameOverUI extends Component {
 
     onRestartClicked(): void {
         console.log(`[GameOverUI] 重新开始`);
-        if (this.onRestart) this.onRestart();
+        EventBus.emit(GameEvents.GAME_RESTART);
     }
 
     onLobbyClicked(): void {
         console.log(`[GameOverUI] 返回大厅`);
-        if (this.onBackToLobby) this.onBackToLobby();
+        EventBus.emit(GameEvents.GAME_LOBBY);
     }
 }

@@ -1,21 +1,7 @@
-import { EventType } from '../config/EnumDefine';
 import { EconomySystem } from '../economy/EconomySystem';
 import { NodeEntity } from '../entity/NodeEntity';
-
-// 随机事件结果
-export class GameEventResult {
-    eventType: EventType;           // 事件类型
-    targetOwnerId: string;          // 受影响的owner（HARVEST为全局ALL，WAR_MOBILIZATION为随机选中的一方）
-    magnitude: number;              // 事件量（金币数 / 动员时间缩减比例）
-    duration: number;               // 事件持续秒数（瞬时事件为0）
-
-    constructor(eventType: EventType, targetOwnerId: string, magnitude: number, duration: number) {
-        this.eventType = eventType;
-        this.targetOwnerId = targetOwnerId;
-        this.magnitude = magnitude;
-        this.duration = duration;
-    }
-}
+import { EventBus } from '../common/EventBus';
+import { GameEvents } from '../common/GameEvents';
 
 // 随机事件系统，负责定时触发丰收/战争动员等全局随机事件，纯逻辑层
 export class EventSystem {
@@ -40,10 +26,9 @@ export class EventSystem {
     }
 
     // 每帧更新，传入逻辑时间增量 dt 秒和所有参与经济的owner列表
-    // 返回本帧触发的随机事件列表
-    static update(dt: number, ownerIds: string[]): GameEventResult[] {
+    // 事件通过 EventBus 发送
+    static update(dt: number, ownerIds: string[]): void {
         EventSystem._totalTime += dt;
-        const results: GameEventResult[] = [];
 
         // 倒计时活动效果
         const expiredKeys: string[] = [];
@@ -63,28 +48,25 @@ export class EventSystem {
         EventSystem._nextEventTime -= dt;
         if (EventSystem._nextEventTime <= 0) {
             EventSystem._nextEventTime = EventSystem.randomInterval();
-            const result = EventSystem.triggerRandomEvent(ownerIds);
-            if (result) results.push(result);
+            EventSystem.triggerRandomEvent(ownerIds);
         }
-
-        return results;
     }
 
     // 随机触发一个事件
-    private static triggerRandomEvent(ownerIds: string[]): GameEventResult | null {
-        if (ownerIds.length === 0) return null;
+    private static triggerRandomEvent(ownerIds: string[]): void {
+        if (ownerIds.length === 0) return;
 
         // 50%丰收 / 50%战争动员
         const roll = Math.random();
         if (roll < 0.5) {
-            return EventSystem.triggerHarvest(ownerIds);
+            EventSystem.triggerHarvest(ownerIds);
         } else {
-            return EventSystem.triggerWarMobilization(ownerIds);
+            EventSystem.triggerWarMobilization(ownerIds);
         }
     }
 
-    // 丰收事件：所有AI和玩家按节点数量获得额外金币（每节点3~8金币）一次性获得
-    private static triggerHarvest(ownerIds: string[]): GameEventResult | null {
+    // 丰收事件：所有AI和玩家按节点数量获得额外金币
+    private static triggerHarvest(ownerIds: string[]): void {
         let totalGold = 0;
         for (const ownerId of ownerIds) {
             const income = EconomySystem.getTotalIncome(ownerId, EventSystem._cachedNodes || []);
@@ -94,20 +76,21 @@ export class EventSystem {
             totalGold += bonus;
         }
 
-        if (totalGold <= 0) return null;
-        return new GameEventResult(EventType.HARVEST, 'ALL', totalGold, 0);
+        if (totalGold > 0) {
+            EventBus.emit(GameEvents.RANDOM_HARVEST, totalGold);
+        }
     }
 
     // 战争动员事件：所有方征兵时间减半，持续15~30秒
-    private static triggerWarMobilization(ownerIds: string[]): GameEventResult | null {
-        if (ownerIds.length === 0) return null;
+    private static triggerWarMobilization(ownerIds: string[]): void {
+        if (ownerIds.length === 0) return;
 
         const duration = 15 + Math.random() * 15;
         for (const ownerId of ownerIds) {
             EventSystem._activeEffects.set(ownerId, duration);
         }
 
-        return new GameEventResult(EventType.WAR_MOBILIZATION, 'ALL', 0.5, duration);
+        EventBus.emit(GameEvents.RANDOM_WAR_MOBILIZATION, duration);
     }
 
     // 生成随机事件间隔

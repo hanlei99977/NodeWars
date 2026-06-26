@@ -1,5 +1,7 @@
 import { _decorator, Component, Label, Button } from 'cc';
 import { SaveSystem, SaveSlotMeta } from '../save/SaveSystem';
+import { EventBus } from '../common/EventBus';
+import { GameEvents } from '../common/GameEvents';
 
 const { ccclass, property } = _decorator;
 
@@ -18,10 +20,6 @@ export class SaveSlotsUI extends Component {
 
     @property(Button)
     closeBtn: Button | null = null;
-
-    // 外部回调
-    onLoadSlot: ((slotId: number) => void) | null = null;
-    onClose: (() => void) | null = null;
 
     onEnable(): void {
         this.refresh();
@@ -59,7 +57,7 @@ export class SaveSlotsUI extends Component {
     onSlotClicked(_event: Event, slotId: string): void {
         const id = parseInt(slotId, 10);
         console.log(`[SaveSlotsUI] 读取存档: 槽位${id}`);
-        if (this.onLoadSlot) this.onLoadSlot(id);
+        EventBus.emit(GameEvents.SAVE_LOAD_SLOT, id);
     }
 
     onDeleteClicked(_event: Event, slotId: string): void {
@@ -71,6 +69,6 @@ export class SaveSlotsUI extends Component {
 
     onCloseClicked(): void {
         console.log(`[SaveSlotsUI] 关闭`);
-        if (this.onClose) this.onClose();
+        EventBus.emit(GameEvents.SAVE_SLOTS_CLOSE);
     }
 }

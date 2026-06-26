@@ -1,21 +1,10 @@
 import { NodeEntity } from '../entity/NodeEntity';
 import { ArmyEntity } from '../entity/ArmyEntity';
-import { OwnerType, SpecialNodeType, EconomyEventType } from '../config/EnumDefine';
+import { OwnerType, SpecialNodeType } from '../config/EnumDefine';
 import { NodeConfig } from '../config/NodeConfig';
 import { RecruitConfig } from '../config/RecruitConfig';
-
-// 经济事件数据
-export class EconomyEvent {
-    type: EconomyEventType;
-    ownerId: OwnerType;                         // 触发事件的所有方
-    disbandCount?: number;                      // 本次解散的士兵人数
-
-    constructor(type: EconomyEventType, ownerId: OwnerType, disbandCount?: number) {
-        this.type = type;
-        this.ownerId = ownerId;
-        this.disbandCount = disbandCount;
-    }
-}
+import { EventBus } from '../common/EventBus';
+import { GameEvents } from '../common/GameEvents';
 
 // 经济系统，负责金币增长、军费消耗、破产警告与即时裁军，纯逻辑层
 export class EconomySystem {
@@ -44,6 +33,7 @@ export class EconomySystem {
         const current = EconomySystem.getGold(ownerId);
         if (current < amount) return false;
         EconomySystem._goldMap.set(ownerId, current - amount);
+        EventBus.emit(GameEvents.GOLD_CHANGED, ownerId);
         return true;
     }
 
@@ -51,6 +41,7 @@ export class EconomySystem {
     static addGold(ownerId: string, amount: number): void {
         const current = EconomySystem.getGold(ownerId);
         EconomySystem._goldMap.set(ownerId, current + amount);
+        EventBus.emit(GameEvents.GOLD_CHANGED, ownerId);
     }
 
     // 判断某方是否可支付指定金额
@@ -107,8 +98,7 @@ export class EconomySystem {
 
     // 每帧经济更新，传入逻辑时间增量 dt 秒
     // 金币不允许为负：当净支出超过现有金币时，差额部分即时解散等量士兵（1士兵=1金币）
-    static update(dt: number, nodes: NodeEntity[], armies: ArmyEntity[]): EconomyEvent[] {
-        const events: EconomyEvent[] = [];
+    static update(dt: number, nodes: NodeEntity[], armies: ArmyEntity[]): void {
 
         for (const [ownerId, gold] of EconomySystem._goldMap.entries()) {
             if (ownerId === OwnerType.NEUTRAL) continue;
@@ -127,19 +117,17 @@ export class EconomySystem {
             } else {
                 // 金币不足以支付军费：差额部分即时解散等量士兵
                 EconomySystem._goldMap.set(ownerId, 0);
-                const deficit = Math.ceil(-newGold); // 差额金币
+                const deficit = Math.ceil(-newGold);
                 const disbanded = EconomySystem.disbandSoldiers(ownerId, nodes, deficit);
 
                 // 仅玩家触发警告
                 if (!EconomySystem._warnedOwners.has(ownerId)) {
                     EconomySystem._warnedOwners.add(ownerId);
-                    events.push(new EconomyEvent(EconomyEventType.GOLD_ZERO_WARNING, ownerId as OwnerType));
+                    EventBus.emit(GameEvents.ECONOMY_GOLD_ZERO_WARNING, ownerId);
                 }
-                events.push(new EconomyEvent(EconomyEventType.DISBAND_SOLDIERS, ownerId as OwnerType, disbanded));
+                EventBus.emit(GameEvents.ECONOMY_DISBAND_SOLDIERS, ownerId, disbanded);
             }
         }
-
-        return events;
     }
 
     // 获取所有参与经济的owner列表
