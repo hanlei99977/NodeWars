@@ -672,6 +672,7 @@ export class GameManager extends Component {
         const node = this._nodes[nodeId];
         if (!node) return;
 
+        this._closeAllPanels();
         this.nodePanel.bindToEntity(node, OwnerType.PLAYER);
         this.nodePanel.node.active = true;
 
@@ -843,6 +844,7 @@ export class GameManager extends Component {
         const edge = this._edges.find(e => e.id === edgeId);
         if (!edge) return;
 
+        this._closeAllPanels();
         this.edgePanel.bindToEntity(edge);
         this.edgePanel.node.active = true;
 
@@ -863,13 +865,16 @@ export class GameManager extends Component {
         if (!this.armyPanel) return;
         const army = this._armies.find(a => a.id === armyId);
         if (!army) return;
+        console.log(`[GameManager] 点击军队#${armyId} (owner=${army.ownerId}, count=${army.soldierCount}, state=${ArmyState[army.state]})`);
+        if (army.ownerId !== OwnerType.PLAYER) return;
 
-        if (army.ownerId === OwnerType.PLAYER && army.state === ArmyState.MOVING) {
+        if (army.state === ArmyState.MOVING) {
             console.log(`[GameManager] 待改道: 军队#${armyId} — 点击目标节点`);
             this._pendingArmyRedirect = { armyId };
-            //return;
         }
 
+        this._closeAllPanels();
+        console.log(`[GameManager] 弹出军队面板: 军队#${armyId}`);
         this.armyPanel.bindToEntity(army);
         this.armyPanel.node.active = true;
 
@@ -887,6 +892,12 @@ export class GameManager extends Component {
             console.log(`[GameManager] 取消改道`);
             this._pendingArmyRedirect = null;
         }
+    }
+
+    private _closeAllPanels(): void {
+        if (this.nodePanel) this.nodePanel.node.active = false;
+        if (this.edgePanel) this.edgePanel.node.active = false;
+        if (this.armyPanel) this.armyPanel.node.active = false;
     }
 
     private _dispatchTroops(srcNodeId: number, count: number, targetNodeId: number): void {
