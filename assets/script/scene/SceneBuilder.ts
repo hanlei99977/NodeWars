@@ -223,9 +223,9 @@ export class SceneBuilder extends Component {
         goNode.active = false;
 
         // -- EdgePanel --
-        const epNode = make(canvas, 'EdgePanel', 310, 0, 300, 280);
-        makeLabel(epNode, 'EP_Title', '线路 #', -110, 90, 280, 36, 20);
-        makeLabel(epNode, 'EP_Info', '', -110, 30, 280, 36, 20);
+        const epNode = make(canvas, 'EdgePanel', 460, 0, 300, 280);
+        makeLabel(epNode, 'EP_Title', '线路 #', 0, 90, 280, 36, 24);
+        makeLabel(epNode, 'EP_Info', '', -0, 30, 280, 36, 24);
         const upgBtn = makeBtn(epNode, 'EP_Upgrade', '升级→2级(50金)', -40, -30, 180, 46);
         const epClose = makeBtn(epNode, 'EP_Close', '关闭', 0, -90, 100, 44);
         const ep = epNode.addComponent(EdgePanel);
@@ -239,11 +239,11 @@ export class SceneBuilder extends Component {
         epNode.active = false;
 
         // -- ArmyPanel --
-        const apNode = make(canvas, 'ArmyPanel', 310, 0, 300, 300);
-        makeLabel(apNode, 'AP_Title', '军队 #', -110, 100, 280, 36, 20);
-        makeLabel(apNode, 'AP_Info', '', -110, 50, 280, 36, 20);
-        makeLabel(apNode, 'AP_Progress', '', -110, 10, 280, 36, 20);
-        makeLabel(apNode, 'AP_Path', '', -110, -30, 280, 36, 20);
+        const apNode = make(canvas, 'ArmyPanel', 460, 0, 300, 300);
+        makeLabel(apNode, 'AP_Title', '军队 #', 0, 100, 280, 36, 24);
+        makeLabel(apNode, 'AP_Info', '', 0, 50, 280, 36, 24);
+        makeLabel(apNode, 'AP_Progress', '', 0, 10, 280, 36, 24);
+        makeLabel(apNode, 'AP_Path', '', 0, -30, 280, 36, 24);
         const apClose = makeBtn(apNode, 'AP_Close', '关闭', 0, -90, 100, 44);
         const ap = apNode.addComponent(ArmyPanel);
         ap.titleLabel    = apNode.getChildByName('AP_Title')!.getComponent(Label);
