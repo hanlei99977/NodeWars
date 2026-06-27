@@ -72,7 +72,10 @@ export class MapViewManager {
     private _nodeGraphics: (Graphics | null)[] = [];
 
     /** 节点驻军/所有者标签 Label 数组，按 nodeId 索引 */
-    private _nodeOwnerLabels: (Label | null)[] = [];
+    private _nodeInfoLabels: (Label | null)[] = [];
+
+    /** 节点等级/所有者标签 Label 数组，按 nodeId 索引 */
+    private _nodeLevelLabels: (Label | null)[] = [];
 
     /** 节点包装节点数组，按 nodeId 索引（承载圆形、标签、触摸事件） */
     private _nodeWrapperNodes: (Node | null)[] = [];
@@ -216,7 +219,8 @@ export class MapViewManager {
         }
 
         this._nodeGraphics = new Array(nodes.length).fill(null);
-        this._nodeOwnerLabels = new Array(nodes.length).fill(null);
+        this._nodeInfoLabels = new Array(nodes.length).fill(null);
+        this._nodeLevelLabels = new Array(nodes.length).fill(null);
         this._nodeWrapperNodes = new Array(nodes.length).fill(null);
 
         for (const n of nodes) {
@@ -246,7 +250,8 @@ export class MapViewManager {
             this._dragSurface = null;
         }
         this._nodeGraphics = [];
-        this._nodeOwnerLabels = [];
+        this._nodeInfoLabels = [];
+        this._nodeLevelLabels = [];
         this._nodeWrapperNodes = [];
         this._isDragging = false;
         this._dragLastPos = null;
@@ -268,8 +273,9 @@ export class MapViewManager {
         for (let i = 0; i < nodes.length; i++) {
             const n = nodes[i];
             const g = this._nodeGraphics[i];
-            const lbl = this._nodeOwnerLabels[i];
-            if (!g || !lbl) continue;
+            const lbl = this._nodeInfoLabels[i];
+            const lvl = this._nodeLevelLabels[i];
+            if (!g || !lbl || !lvl) continue;
 
             const visible = FogSystem.isNodeExplored(n.id, OwnerType.PLAYER);
 
@@ -286,6 +292,8 @@ export class MapViewManager {
 
                 lbl.string = FogSystem.isNodeCurrentlyVisible(n.id, OwnerType.PLAYER)
                     ? `${n.garrisonCount}` : `?`;
+                    lvl.string = FogSystem.isNodeCurrentlyVisible(n.id, OwnerType.PLAYER)
+                    ? `Lv${n.level}` : `?`;
             } else {
                 g.fillColor = new Color(60, 60, 60);
                 g.strokeColor = new Color(40, 40, 40);
@@ -295,6 +303,7 @@ export class MapViewManager {
                 g.stroke();
 
                 lbl.string = '';
+                lvl.string = '';
             }
         }
     }
@@ -426,6 +435,7 @@ export class MapViewManager {
         lvlLabel.getComponent(UITransform)!.setContentSize(50, 20);
         lvlLabel.setPosition(0, MapViewManager.NODE_RADIUS + 12, 0);
         wrapper.addChild(lvlLabel);
+        this._nodeLevelLabels[n.id] = lvlL;
 
         // 驻军/所有者标签（正下方）
         const infoLabel = new Node('InfoLabel');
@@ -436,7 +446,7 @@ export class MapViewManager {
         infoLabel.getComponent(UITransform)!.setContentSize(80, 22);
         infoLabel.setPosition(0, -MapViewManager.NODE_RADIUS - 14, 0);
         wrapper.addChild(infoLabel);
-        this._nodeOwnerLabels[n.id] = infoL;
+        this._nodeInfoLabels[n.id] = infoL;
 
         // ======================== 节点触摸交互 ========================
         let touchStartPos = new Vec2();          // 触摸起始 UI 坐标
