@@ -376,6 +376,8 @@ export class MapViewManager {
 
         this._edgeNodes.set(edge.id, wrapper);
         this._mapLayer!.addChild(wrapper);
+
+        gNode.setSiblingIndex(1);
     }
 
     /**
@@ -474,6 +476,8 @@ export class MapViewManager {
 
         this._mapLayer!.addChild(wrapper);
         this._nodeWrapperNodes[n.id] = wrapper;
+
+        circle.setSiblingIndex(3);
     }
 
     /**
@@ -521,6 +525,7 @@ export class MapViewManager {
         });
 
         this._mapLayer!.addChild(vn);
+        vn.setSiblingIndex(2);
         return vn;
     }
 
