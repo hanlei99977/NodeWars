@@ -175,6 +175,12 @@ export class GameEventBinder {
             ctx.mapView.refreshNodeViews(ctx.nodes);
         });
 
+        EventBus.on(GameEvents.EDGE_BATCH_UPGRADE, (edgeId: number) => {
+            EdgeUpgradeSystem.batchUpgrade(ctx.edges, ctx.nodes, OwnerType.PLAYER);
+            if (ctx.edgePanel) ctx.edgePanel.refresh();
+            ctx.mapView.refreshNodeViews(ctx.nodes);
+        });
+
         EventBus.on(GameEvents.PANEL_CLOSE_EDGE, () => {
             if (ctx.edgePanel) ctx.edgePanel.node.active = false;
         });

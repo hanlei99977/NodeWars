@@ -13,7 +13,8 @@ export const GameEvents = {
 
     // --- 线路操作（UI → GameManager） ---
     EDGE_UPGRADE: 'edge:upgrade',
-
+    EDGE_BATCH_UPGRADE: 'edge:batchUpgrade',
+    
     // --- 面板 ---
     PANEL_CLOSE_NODE: 'panel:closeNode',
     PANEL_CLOSE_EDGE: 'panel:closeEdge',

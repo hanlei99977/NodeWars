@@ -225,16 +225,19 @@ export class SceneBuilder extends Component {
         // -- EdgePanel --
         const epNode = make(canvas, 'EdgePanel', 460, 0, 300, 280);
         makeLabel(epNode, 'EP_Title', '线路 #', 0, 90, 280, 36, 24);
-        makeLabel(epNode, 'EP_Info', '', -0, 30, 280, 36, 24);
-        const upgBtn = makeBtn(epNode, 'EP_Upgrade', '升级→2级(50金)', -40, -30, 180, 46);
-        const epClose = makeBtn(epNode, 'EP_Close', '关闭', 0, -90, 100, 44);
+        makeLabel(epNode, 'EP_Info', '', 0, 30, 280, 36, 24);
+        const upgBtn = makeBtn(epNode, 'EP_Upgrade', '升级→2级(50金)', -0, -30, 180, 46);
+        const BatchUpgBtn = makeBtn(epNode, 'EP_BatchUpgrade', '批量升级', -0, -90, 180, 46);
+        const epClose = makeBtn(epNode, 'EP_Close', '关闭', 0, -130, 100, 44);
         const ep = epNode.addComponent(EdgePanel);
         ep.titleLabel      = epNode.getChildByName('EP_Title')!.getComponent(Label);
         ep.infoLabel       = epNode.getChildByName('EP_Info')!.getComponent(Label);
         ep.upgradeBtn      = upgBtn.btn;
         ep.upgradeBtnLabel = upgBtn.label;
+        ep.batchUpgradeBtn = BatchUpgBtn.btn;
         ep.closeBtn        = epClose.btn;
         bindClick(upgBtn.btn, epNode, 'EdgePanel', 'onUpgradeClicked');
+        bindClick(BatchUpgBtn.btn, epNode, 'EdgePanel', 'onBatchUpgradeClicked');
         bindClick(epClose.btn, epNode, 'EdgePanel', 'onCloseClicked');
         epNode.active = false;
 

@@ -29,6 +29,9 @@ export class EdgePanel extends Component {
     upgradeBtnLabel: Label | null = null;
 
     @property(Button)
+    batchUpgradeBtn: Button | null = null;
+
+    @property(Button)
     closeBtn: Button | null = null;
 
     private _edge: EdgeEntity | null = null;
@@ -68,6 +71,13 @@ export class EdgePanel extends Component {
         if (this._edge) {
             console.log(`[EdgePanel] 升级: 线路#${this._edge.id}`);
             EventBus.emit(GameEvents.EDGE_UPGRADE, this._edge.id);
+        }
+    }
+
+    onBatchUpgradeClicked(): void {
+        if (this._edge) {
+            console.log(`[EdgePanel] 批量升级线路`);
+            EventBus.emit(GameEvents.EDGE_BATCH_UPGRADE);
         }
     }
 
