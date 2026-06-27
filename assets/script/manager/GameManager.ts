@@ -1,4 +1,4 @@
-import { _decorator, Component, director, Node, Graphics, Color, Label, UITransform, EventTouch, Vec2 } from 'cc';
+import { _decorator, Component, director, Node, Graphics, Color, Label, UITransform, EventTouch, Vec2, Vec3 } from 'cc';
 import { NodeEntity } from '../entity/NodeEntity';
 import { EdgeEntity } from '../entity/EdgeEntity';
 import { ArmyEntity } from '../entity/ArmyEntity';
@@ -57,6 +57,7 @@ export class GameManager extends Component {
     private _dragSurface: Node | null = null;
     private _nodeGraphics: (Graphics | null)[] = [];
     private _nodeOwnerLabels: (Label | null)[] = [];
+    private _nodeWrapperNodes: (Node | null)[] = [];
     private _edgeNodes: Map<number, Node> = new Map();
     private _armyViewNodes: Map<number, Node> = new Map();
     private _dragLastPos: Vec2 | null = null;
@@ -64,6 +65,35 @@ export class GameManager extends Component {
     private _mapBounds = { minX: 0, maxX: 0, minY: 0, maxY: 0 };
     private _pendingSendTroops: { nodeId: number; count: number } | null = null;
     private _pendingArmyRedirect: { armyId: number } | null = null;
+
+    // --- 自动派遣 ---
+    /**
+     * 自动派遣映射表：源节点ID → 目标节点ID
+     * 约束：一个源节点只能有一个目标节点；一个目标节点可以有多个源节点
+     */
+    private _autoDispatchMap: Map<number, number> = new Map();
+    /**
+     * 自动派遣可视化线条：源节点ID → Graphics（金色箭头线）
+     * 挂载在 _mapLayer 上，取消派遣时 destroy
+     */
+    private _autoDispatchLines: Map<number, Graphics> = new Map();
+    /**
+     * 自动派遣冷却计数器：源节点ID → 剩余冷却帧数
+     * 每次成功派出军队后设为 10 帧，防止同帧重复派兵
+     */
+    private _autoDispatchCooldown: Map<number, number> = new Map();
+
+    // --- 滑动追踪（自动派遣手势检测） ---
+    /** 当前滑动操作的起始节点ID，-1 表示无活跃滑动 */
+    private _swipeSourceNodeId: number = -1;
+    /** 滑动起始时的 UI 坐标位置（屏幕像素） */
+    private _swipeStartPos: Vec2 = new Vec2();
+    /** 手指在空白区域停留的累计时间（秒），达到 0.5s 时取消自动派遣 */
+    private _swipeTimer: number = 0;
+    /** 当前是否有活跃的滑动操作 */
+    private _swipeActive: boolean = false;
+    /** 滑动预览线 Graphics（蓝色半透明），跟随手指实时绘制 */
+    private _swipePreviewLine: Graphics | null = null;
 
     private static readonly NODE_RADIUS = 18;// 节点半径
     private static readonly OWNER_COLORS: Record<string, Color> = {
@@ -230,6 +260,15 @@ export class GameManager extends Component {
         // 随机事件
         EventSystem.init();
         EventSystem.updateNodes(this._nodes);
+
+        // 自动派遣重置
+        this._autoDispatchMap.clear();
+        this._autoDispatchCooldown.clear();
+        for (const g of this._autoDispatchLines.values()) {
+            g.node.destroy();
+        }
+        this._autoDispatchLines.clear();
+        this.endSwipe();
     }
 
     update(dt: number): void {
@@ -264,6 +303,9 @@ export class GameManager extends Component {
 
         // --- 6.5 玩家自动征兵 ---
         this.processAutoRecruit();
+
+        // --- 6.6 玩家自动派遣 ---
+        this.processAutoDispatch();
 
         // --- 7. 胜败判定 ---
         this.checkWinLose();
@@ -582,6 +624,7 @@ export class GameManager extends Component {
 
         this._nodeGraphics = new Array(this._nodes.length).fill(null);
         this._nodeOwnerLabels = new Array(this._nodes.length).fill(null);
+        this._nodeWrapperNodes = new Array(this._nodes.length).fill(null);
 
         for (const n of this._nodes) {
             this.createNodeGraphic(n);
@@ -618,8 +661,13 @@ export class GameManager extends Component {
         }
         this._nodeGraphics = [];
         this._nodeOwnerLabels = [];
+        this._nodeWrapperNodes = [];
         this._isDragging = false;
         this._dragLastPos = null;
+        this.clearSwipePreview();
+        this._autoDispatchMap.clear();
+        this._autoDispatchCooldown.clear();
+        this._autoDispatchLines.clear();
         console.log(`清除成功`);
     }
 
@@ -700,17 +748,61 @@ export class GameManager extends Component {
         wrapper.addChild(infoLabel);
         this._nodeOwnerLabels[n.id] = infoL;
 
-        // 点击事件 → 打开 NodePanel
+        // ======================== 节点触摸交互 ========================
+        // 短按（无滑动）→ 打开 NodePanel / 处理待派兵改道
+        // 滑动（从己方节点拖出）→ 建立/取消/替换自动派遣
+        // 滑动回到自身 → 无操作
+        let touchStartPos = new Vec2();          // 触摸起始 UI 坐标
+        let hasMoved = false;                    // 本次触摸是否已判定为滑动
+        const SWIPE_THRESHOLD = 15;              // 滑动触发阈值（像素）
+
         wrapper.on(Node.EventType.TOUCH_START, (e: EventTouch) => {
             e.propagationStopped = true;
-            this.onNodeClicked(n.id, e);
+            touchStartPos.set(e.getUILocation());
+            hasMoved = false;
         });
 
+        wrapper.on(Node.EventType.TOUCH_MOVE, (e: EventTouch) => {
+            const cur = e.getUILocation();
+            
+            const dx = cur.x - touchStartPos.x;
+            const dy = cur.y - touchStartPos.y;
+            // 如果移动距离过小，则不触发滑动
+            if (Math.abs(dx) < SWIPE_THRESHOLD && Math.abs(dy) < SWIPE_THRESHOLD) return;
+
+            if (!hasMoved) {
+                hasMoved = true;
+                console.log(`检测到滑动操作`);
+                console.log(`(${cur.x},${cur.y})`)
+                if (n.ownerId === OwnerType.PLAYER) {
+                    this.onSwipeStart(n.id, touchStartPos);
+                }
+            }
+            if (this._swipeActive) {
+                this.onSwipeMove(e);
+            }
+        });
+
+        wrapper.on(Node.EventType.TOUCH_CANCEL, (e: EventTouch) => {
+            console.log(`滑动操作结束`)
+            if (hasMoved && this._swipeActive) {
+                    this.onSwipeEnd(e);
+            } 
+        });
+
+        wrapper.on(Node.EventType.TOUCH_END, (e: EventTouch) => {
+            if (!hasMoved) {
+                this.onNodeClicked(n.id);
+            }
+        });
+
+
         this._mapLayer!.addChild(wrapper);
+        this._nodeWrapperNodes[n.id] = wrapper;
     }
 
     // 点击某个节点 → 弹出 NodePanel 并绑定数据, 或处理待派兵/改道
-    private onNodeClicked(nodeId: number, _e: EventTouch): void {
+    private onNodeClicked(nodeId: number): void {
         // 处理待派兵：以点击节点为目标出兵
         if (this._pendingSendTroops) {
             const p = this._pendingSendTroops;
@@ -930,6 +1022,343 @@ export class GameManager extends Component {
         if (this.armyPanel && this.armyPanel.node.active) this.armyPanel.refresh();
     }
 
+    // ======================== 自动派遣 ========================
+
+    /**
+     * 滑动开始回调（手指从己方节点移出超过阈值时触发）
+     * 
+     * 作用：记录滑动起点状态，激活滑动追踪
+     * 
+     * @param nodeId  滑动起始节点ID（必须是玩家拥有的节点）
+     * @param startPos 滑动起始 UI 坐标（屏幕像素）
+     * @returns 无
+     */
+    private onSwipeStart(nodeId: number, startPos: Vec2): void {
+        console.log(`滑动开始回调`);
+        this._swipeSourceNodeId = nodeId;
+        this._swipeStartPos.set(startPos);
+        this._swipeActive = true;
+        this._swipeTimer = 0;
+    }
+
+    /**
+     * 滑动移动回调（每帧 TOUCH_MOVE 事件触发）
+     * 
+     * 作用：
+     *   1. 将屏幕坐标转为地图坐标
+     *   2. 检测手指是否在某个节点附近 → 绘制蓝色预览线到该节点
+     *   3. 手指在空白区域时累加计时器，≥0.5s 且该源节点已有派遣时取消
+     * 
+     * @param e 触摸事件对象，用于获取当前 UI 坐标
+     * @returns 无
+     */
+    private onSwipeMove(e: EventTouch): void {
+         console.log(`滑动移动回调`);
+        if (!this._mapLayer) return;
+        const curPos = e.getUILocation();
+        // UI坐标本质就是世界坐标，转Vec3后反向变换得到本地坐标
+        const localPos = new Vec3();
+        this._mapLayer.inverseTransformPoint(localPos,new Vec3(curPos.x, curPos.y, 0));
+        const mapX = localPos.x;
+        const mapY = localPos.y;
+
+        const srcNode = this._nodes[this._swipeSourceNodeId];
+        if (!srcNode) return;
+
+        const nearNodeId = this.findNodeAtMapPos(mapX, mapY);
+
+        if (nearNodeId >= 0 && nearNodeId !== this._swipeSourceNodeId) {
+            // 手指在另一个节点上 → 重置计时器，预览线连接到该节点
+            this._swipeTimer = 0;
+            this.drawSwipePreview(srcNode.position.x, srcNode.position.y,
+                this._nodes[nearNodeId].position.x, this._nodes[nearNodeId].position.y);
+        } else {
+            // 手指在空白区域 → 预览线跟随手指
+            this._swipeTimer += 1 / 60;
+            this.drawSwipePreview(srcNode.position.x, srcNode.position.y, mapX, mapY);
+        }
+    }
+
+    /**
+     * 滑动结束回调（手指抬起时触发）
+     * 
+     * 作用：检测手指最终位置是否在某个节点上，是则建立/替换自动派遣，
+     *      不在节点上则查看时间是否大于0.5，若大于则删除之前的自动派遣
+     * 
+     * @param e 触摸事件对象，用于获取最终 UI 坐标
+     * @returns 无
+     */
+    private onSwipeEnd(e: EventTouch): void {
+        if (!this._mapLayer) { this.endSwipe(); return; }
+        const curPos = e.getUILocation();
+        // UI坐标本质就是世界坐标，转Vec3后反向变换得到本地坐标
+        const localPos = new Vec3();
+        this._mapLayer.inverseTransformPoint(localPos,new Vec3(curPos.x, curPos.y, 0));
+        const mapX = localPos.x;
+        const mapY = localPos.y;
+
+        const nearNodeId = this.findNodeAtMapPos(mapX, mapY);
+        console.log(`滑动操作结束;滑动结束位置为：X: ${mapX} Y:${mapY},附近节点ID：${nearNodeId}`);
+        // 手指最终落在有效节点上 → 建立/替换派遣
+        if (nearNodeId >= 0 && nearNodeId !== this._swipeSourceNodeId) {
+            this.setAutoDispatch(this._swipeSourceNodeId, nearNodeId);
+        }
+        // 如果当前源节点已有派遣，且空白停留 ≥ 0.5s 则取消已有的自动派遣
+        else if (this._autoDispatchMap.has(this._swipeSourceNodeId)) {
+            if (this._swipeTimer >= 0.5) {
+                this.cancelAutoDispatch(this._swipeSourceNodeId);
+                this.endSwipe();
+            }
+        }
+
+        this.endSwipe();
+    }
+
+    /**
+     * 结束滑动追踪状态
+     * 
+     * 作用：重置所有滑动状态变量，清除预览线，关闭滑动激活标记
+     * 
+     * @returns 无
+     */
+    private endSwipe(): void {
+        console.log(`结束滑动追踪状态`);
+        this._swipeActive = false;
+        this._swipeSourceNodeId = -1;
+        this._swipeTimer = 0;
+        this.clearSwipePreview();
+    }
+
+    /**
+     * 在地图坐标 (mapX, mapY) 处查找最近的节点
+     * 
+     * 作用：遍历所有节点，按距离判断手指是否在节点命中范围内
+     * 
+     * @param mapX 地图 X 坐标
+     * @param mapY 地图 Y 坐标
+     * @returns 命中节点的 id，无命中返回 -1
+     */
+    private findNodeAtMapPos(mapX: number, mapY: number): number {
+        // 命中半径 = 节点半径 + 20px 容差
+        const HIT_RADIUS = GameManager.NODE_RADIUS + 20;
+        for (const node of this._nodes) {
+            const dx = node.position.x - mapX;
+            const dy = node.position.y - mapY;
+            if (dx * dx + dy * dy < HIT_RADIUS * HIT_RADIUS) {
+                console.log(`附近的节点坐标是：(${node.position.x},${node.position})`);
+                return node.id;
+            }
+        }
+        return -1;
+    }
+
+    /**
+     * 建立（或替换）自动派遣关系
+     * 
+     * 作用：
+     *   1. 若该源节点已有旧派遣 → 先移除旧可视化线
+     *   2. 若 src === tgt → 取消派遣（自己到自己是无效的）
+     *   3. 否则写入映射表并绘制金色箭头线
+     * 
+     * 约束：一个源节点只能有一个目标节点；目标节点可以有多个源节点
+     * 
+     * @param srcNodeId 源节点ID（玩家控制的出兵节点）
+     * @param tgtNodeId 目标节点ID（军队自动派往的节点）
+     * @returns 无
+     */
+    setAutoDispatch(srcNodeId: number, tgtNodeId: number): void {
+        const oldTarget = this._autoDispatchMap.get(srcNodeId);
+        if (oldTarget !== undefined) {
+            this.removeAutoDispatchLine(srcNodeId);
+        }
+        if (srcNodeId === tgtNodeId) {
+            this._autoDispatchMap.delete(srcNodeId);
+            return;
+        }
+        this._autoDispatchMap.set(srcNodeId, tgtNodeId);
+        this.drawAutoDispatchLine(srcNodeId, tgtNodeId);
+        console.log(`[GameManager] 自动派遣: 节点#${srcNodeId} → #${tgtNodeId}`);
+    }
+
+    /**
+     * 取消指定源节点的自动派遣
+     * 
+     * 作用：从映射表删除记录，销毁可视化箭头线
+     * 
+     * @param srcNodeId 要取消派遣的源节点ID
+     * @returns 无
+     */
+    cancelAutoDispatch(srcNodeId: number): void {
+        if (!this._autoDispatchMap.has(srcNodeId)) return;
+        this._autoDispatchMap.delete(srcNodeId);
+        this.removeAutoDispatchLine(srcNodeId);
+        console.log(`[GameManager] 取消自动派遣: 节点#${srcNodeId}`);
+    }
+
+    /**
+     * 自动派遣调度循环（每帧由 update() 第 6.6 步调用）
+     * 
+     * 作用：遍历所有派遣对，满足条件时将源节点全部驻军派向目标节点
+     * 
+     * 执行逻辑：
+     *   1. 检查源节点是否仍属玩家 → 否则取消该派遣
+     *   2. 检查驻军数 > 0
+     *   3. 检查冷却计数器 → 冷却中跳过（每次派兵后设 10 帧冷却）
+     *   4. 寻路 → 不可达跳过
+     *   5. 清空源节点驻军，创建军队沿路径出发
+     * 
+     * @returns 无
+     */
+    private processAutoDispatch(): void {
+        for (const [srcNodeId, tgtNodeId] of this._autoDispatchMap) {
+            const srcNode = this._nodes[srcNodeId];
+            if (!srcNode || srcNode.ownerId !== OwnerType.PLAYER) {
+                this.cancelAutoDispatch(srcNodeId);
+                continue;
+            }
+            if (srcNode.garrisonCount <= 0) continue;
+
+            // 冷却机制：每帧 -1，非零时跳过
+            const cooldown = this._autoDispatchCooldown.get(srcNodeId) || 0;
+            if (cooldown > 0) {
+                this._autoDispatchCooldown.set(srcNodeId, cooldown - 1);
+                continue;
+            }
+
+            const path = ArmyManager.findPath(srcNodeId, tgtNodeId);
+            if (!path || path.length < 2) continue;
+
+            // 派出全部驻军
+            const count = srcNode.garrisonCount;
+            srcNode.garrisonCount = 0;
+            ArmyManager.createArmy(OwnerType.PLAYER, count, path);
+            // 设 10 帧冷却，防止同帧内重复派兵（等军队离开始发节点）
+            this._autoDispatchCooldown.set(srcNodeId, 10);
+        }
+    }
+
+    // ======================== 自动派遣可视化 ========================
+
+    /**
+     * 绘制自动派遣箭头线（金色半透明 + 中段箭头）
+     * 
+     * 作用：在 _mapLayer 上创建 Graphics 节点，画出从源到目标的连线
+     *       并在中点处绘制 V 形箭头指示方向
+     * 
+     * @param srcNodeId 源节点ID
+     * @param tgtNodeId 目标节点ID
+     * @returns 无
+     */
+    private drawAutoDispatchLine(srcNodeId: number, tgtNodeId: number): void {
+        if (!this._mapLayer) return;
+        this.removeAutoDispatchLine(srcNodeId);
+
+        const src = this._nodes[srcNodeId];
+        const tgt = this._nodes[tgtNodeId];
+        if (!src || !tgt) return;
+
+        const lineNode = new Node(`AD_Line_${srcNodeId}`);
+        const g = lineNode.addComponent(Graphics);
+        // 绘制主线：金色半透明
+        g.strokeColor = new Color(255, 200, 50, 200);
+        g.lineWidth = 2;
+        g.moveTo(src.position.x, src.position.y);
+        g.lineTo(tgt.position.x, tgt.position.y);
+        g.stroke();
+
+        // 在中点绘制方向箭头（V 形）
+        const midX = (src.position.x + tgt.position.x) / 2;
+        const midY = (src.position.y + tgt.position.y) / 2;
+        const angle = Math.atan2(tgt.position.y - src.position.y, tgt.position.x - src.position.x);
+        const arrowLen = 10;
+        g.strokeColor = new Color(255, 200, 50, 200);
+        // 左侧箭头羽
+        g.moveTo(midX, midY);
+        g.lineTo(
+            midX - arrowLen * Math.cos(angle - 0.5),
+            midY - arrowLen * Math.sin(angle - 0.5)
+        );
+        g.stroke();
+        // 右侧箭头羽
+        g.moveTo(midX, midY);
+        g.lineTo(
+            midX - arrowLen * Math.cos(angle + 0.5),
+            midY - arrowLen * Math.sin(angle + 0.5)
+        );
+        g.stroke();
+
+        this._mapLayer.addChild(lineNode);
+        this._autoDispatchLines.set(srcNodeId, g);
+    }
+
+    /**
+     * 移除指定源节点的自动派遣可视化线
+     * 
+     * 作用：销毁 Graphics 节点并从映射表中删除
+     * 
+     * @param srcNodeId 源节点ID
+     * @returns 无
+     */
+    private removeAutoDispatchLine(srcNodeId: number): void {
+        const g = this._autoDispatchLines.get(srcNodeId);
+        if (g) {
+            g.node.destroy();
+            this._autoDispatchLines.delete(srcNodeId);
+        }
+    }
+
+    /**
+     * 绘制滑动预览线（蓝色半透明）
+     * 
+     * 作用：实时绘制从源节点到手指当前位置的预览线
+     *       每次调用先清除旧线再画新线，避免残留
+     * 
+     * @param x1 源节点地图 X 坐标
+     * @param y1 源节点地图 Y 坐标
+     * @param x2 手指当前位置地图 X 坐标（或目标节点 X）
+     * @param y2 手指当前位置地图 Y 坐标（或目标节点 Y）
+     * @returns 无
+     */
+    private drawSwipePreview(x1: number, y1: number, x2: number, y2: number): void {
+        this.clearSwipePreview();
+        if (!this._mapLayer) return;
+        const lineNode = new Node('SwipePreview');
+        const g = lineNode.addComponent(Graphics);
+        g.strokeColor = new Color(100, 200, 255, 180);
+        g.lineWidth = 2;
+        g.moveTo(x1, y1);
+        g.lineTo(x2, y2);
+        g.stroke();
+        this._mapLayer.addChild(lineNode);
+        // 确保预览线渲染在所有地图元素最上层
+        lineNode.setSiblingIndex(9999);
+        this._swipePreviewLine = g;
+    }
+
+    /**
+     * 清除滑动预览线
+     * 
+     * 作用：销毁滑动预览线 Graphics 节点
+     * 
+     * @returns 无
+     */
+    private clearSwipePreview(): void {
+        if (this._swipePreviewLine) {
+            this._swipePreviewLine.node.destroy();
+            this._swipePreviewLine = null;
+        }
+    }
+
+    /**
+     * 从源节点向目标节点派兵（一次性，非自动派遣）
+     * 
+     * 作用：BFS 寻路 → 扣除源节点驻军 → 创建军队沿路径行军
+     * 
+     * @param srcNodeId    源节点ID（出兵节点）
+     * @param count        派出士兵数量
+     * @param targetNodeId 目标节点ID（目的地）
+     * @returns 无
+     */
     private _dispatchTroops(srcNodeId: number, count: number, targetNodeId: number): void {
         const srcNode = this._nodes[srcNodeId];
         if (!srcNode || count <= 0 || count > srcNode.garrisonCount) return;
