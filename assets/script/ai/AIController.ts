@@ -12,6 +12,7 @@ import { NodeUpgradeSystem } from '../manager/NodeUpgradeSystem';
 import { NodeConvertSystem } from '../manager/NodeConvertSystem';
 import { EdgeUpgradeSystem } from '../manager/EdgeUpgradeSystem';
 import { ArmyManager } from '../manager/ArmyManager';
+import { PathfindingManager } from '../manager/PathfindingManager';
 
 // AI思考结果（供外层记录日志/调试）
 export class AIThinkResult {
@@ -142,7 +143,7 @@ export class AIController {
             const sourceNode = nodes[sourceNodeId];
             if (sourceNode && sourceNode.garrisonCount >= soldierCount) {
                 sourceNode.garrisonCount -= soldierCount;
-                const path = ArmyManager.findPath(sourceNodeId, targetNodeId);
+                const path = PathfindingManager.findPath(sourceNodeId, targetNodeId);
                 if (path && path.length >= 2) {
                     ArmyManager.createArmy(aiId as OwnerType, soldierCount, path);
                     result.action = 'attack';
@@ -228,7 +229,7 @@ export class AIController {
 
         for (const src of ownNodes) {
             for (const tgt of targets) {
-                const path = ArmyManager.findPath(src.id, tgt.id);
+                const path = PathfindingManager.findPath(src.id, tgt.id);
                 if (!path || path.length < 2) continue;
                 if (path.length < bestDist) {
                     bestDist = path.length;
@@ -271,7 +272,7 @@ export class AIController {
             let bestDist = Infinity;
             for (const src of ownNodes) {
                 if (src.garrisonCount < sendCount) continue;// 节点军队数量不足
-                const path = ArmyManager.findPath(src.id, tgt.id);
+                const path = PathfindingManager.findPath(src.id, tgt.id);
                 if (!path || path.length < 2) continue;
                 // 找到最近的源节点
                 if (path.length < bestDist) {
@@ -313,7 +314,7 @@ export class AIController {
             let bestSrcGarrison = 0;
             for (const src of ownNodes) {
                 if (src.garrisonCount < required) continue;
-                const path = ArmyManager.findPath(src.id, tgt.id);
+                const path = PathfindingManager.findPath(src.id, tgt.id);
                 if (!path || path.length < 2) continue;
                 if (path.length < bestDist) {
                     bestDist = path.length;
@@ -340,7 +341,7 @@ export class AIController {
         let bestDist = Infinity;
         for (const src of ownNodes) {
             if (src.garrisonCount < required) continue;
-            const path = ArmyManager.findPath(src.id, bestTarget.id);
+            const path = PathfindingManager.findPath(src.id, bestTarget.id);
             if (!path || path.length < 2) continue;
             if (path.length < bestDist) {
                 bestDist = path.length;

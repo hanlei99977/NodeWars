@@ -6,6 +6,7 @@ import { GameState, MapSize, Difficulty, FogMode, GameSpeed, OwnerType, ArmyStat
 import { GameConfig } from '../config/GameConfig';
 import { MapGenerator, MapGenerateResult } from '../map/MapGenerator';
 import { ArmyManager } from '../manager/ArmyManager';
+import { PathfindingManager } from '../manager/PathfindingManager';
 import { NodeBattleSystem, NodeBattleResult } from '../battle/NodeBattleSystem';
 import { ArmyCollisionSystem } from '../battle/ArmyCollisionSystem';
 import { EconomySystem } from '../economy/EconomySystem';
@@ -460,17 +461,17 @@ export class GameManager extends Component {
             if (this.nodePanel) this.nodePanel.node.active = false;
         });
         EventBus.on(GameEvents.NODE_BATCH_UPGRADE_ALL, () => {
-            NodeUpgradeSystem.batchUpgrade(this._nodes, 'all', OwnerType.PLAYER, ArmyManager.adjList);
+            NodeUpgradeSystem.batchUpgrade(this._nodes, 'all', OwnerType.PLAYER, PathfindingManager.adjList);
             this.refreshMapViews();
             if (this.nodePanel) this.nodePanel.refreshPanel();
         });
         EventBus.on(GameEvents.NODE_BATCH_UPGRADE_FORTRESS, () => {
-            NodeUpgradeSystem.batchUpgrade(this._nodes, 'fortress', OwnerType.PLAYER, ArmyManager.adjList);
+            NodeUpgradeSystem.batchUpgrade(this._nodes, 'fortress', OwnerType.PLAYER, PathfindingManager.adjList);
             this.refreshMapViews();
             if (this.nodePanel) this.nodePanel.refreshPanel();
         });
         EventBus.on(GameEvents.NODE_BATCH_UPGRADE_MARKET, () => {
-            NodeUpgradeSystem.batchUpgrade(this._nodes, 'market', OwnerType.PLAYER, ArmyManager.adjList);
+            NodeUpgradeSystem.batchUpgrade(this._nodes, 'market', OwnerType.PLAYER, PathfindingManager.adjList);
             this.refreshMapViews();
             if (this.nodePanel) this.nodePanel.refreshPanel();
         });
@@ -1225,7 +1226,7 @@ export class GameManager extends Component {
                 continue;
             }
 
-            const path = ArmyManager.findPath(srcNodeId, tgtNodeId);
+            const path = PathfindingManager.findPath(srcNodeId, tgtNodeId);
             if (!path || path.length < 2) continue;
 
             // 派出全部驻军
@@ -1363,7 +1364,7 @@ export class GameManager extends Component {
         const srcNode = this._nodes[srcNodeId];
         if (!srcNode || count <= 0 || count > srcNode.garrisonCount) return;
 
-        const path = ArmyManager.findPath(srcNodeId, targetNodeId);
+        const path = PathfindingManager.findPath(srcNodeId, targetNodeId);
         if (!path || path.length < 2) {
             console.log(`[GameManager] 派兵失败: 节点#${srcNodeId} → #${targetNodeId} 无路径`);
             return;

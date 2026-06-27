@@ -6,41 +6,25 @@ import { ArmyConfig } from '../config/ArmyConfig';
 import { EdgeConfig } from '../config/EdgeConfig';
 import { EventBus } from '../common/EventBus';
 import { GameEvents } from '../common/GameEvents';
+import { PathfindingManager } from './PathfindingManager';
 
-// 行军管理器，负责军队创建、每帧行军推进、路径查找、改道、分兵，纯逻辑层
+// 行军管理器，负责军队创建、每帧行军推进、改道、分兵，纯逻辑层
 export class ArmyManager {
 
     private static _armies: ArmyEntity[] = [];
     private static _nextArmyId = 1;
-    private static _edgesMap: Map<string, EdgeEntity> = new Map();     // "minId_maxId" → EdgeEntity
-    private static _adjList: number[][] = [];                           // 邻接表
-    private static _nodeCount = 0;
 
-    // 初始化：绑定地图的边和节点，构建邻接表和边查询映射
+    /**
+     * 初始化：重置军队列表和ID计数器，委托 PathfindingManager 初始化图结构
+     *
+     * @param edges  地图所有边实体
+     * @param nodes  地图所有节点实体
+     * @returns 无
+     */
     static init(edges: EdgeEntity[], nodes: NodeEntity[]): void {
-        ArmyManager._edgesMap.clear();
         ArmyManager._armies = [];
         ArmyManager._nextArmyId = 1;
-        ArmyManager._nodeCount = nodes.length;
-
-        // 构建边映射 key = "minId_maxId"
-        for (const e of edges) {
-            const minId = Math.min(e.nodeAId, e.nodeBId);
-            const maxId = Math.max(e.nodeAId, e.nodeBId);
-            // 将边保存为 "minId_maxId" 的映射，便于快速查找两节点间的边
-            ArmyManager._edgesMap.set(`${minId}_${maxId}`, e);
-        }
-
-        // 构建邻接表
-        ArmyManager._adjList = Array.from({ length: nodes.length }, () => []);
-        for (const e of edges) {
-            ArmyManager._adjList[e.nodeAId].push(e.nodeBId);
-            ArmyManager._adjList[e.nodeBId].push(e.nodeAId);
-        }
-    }
-
-    static get adjList(): number[][] {
-        return ArmyManager._adjList;
+        PathfindingManager.init(edges, nodes);
     }
 
     // 创建一支新军队（从节点派出），返回创建的ArmyEntity
@@ -80,7 +64,7 @@ export class ArmyManager {
             }
 
             // 查找当前所在边
-            const edge = ArmyManager.findEdge(army.currentNodeId, army.nextNodeId);
+            const edge = PathfindingManager.findEdge(army.currentNodeId, army.nextNodeId);
             if (!edge) {
                 console.warn(`[ArmyManager] 军队#${army.id} 所在边不存在（${army.currentNodeId} -> ${army.nextNodeId}），移除`);
                 console.log(`progress ${army.progress}`)
@@ -125,58 +109,6 @@ export class ArmyManager {
         return ArmyManager._armies;
     }
 
-    // 根据两节点ID查找边
-    static findEdge(nodeAId: number, nodeBId: number): EdgeEntity | null {
-        const minId = Math.min(nodeAId, nodeBId);
-        const maxId = Math.max(nodeAId, nodeBId);
-        return ArmyManager._edgesMap.get(`${minId}_${maxId}`) || null;
-    }
-
-    // 依邻接表更新（边拆分/替换后调用）
-    static updateAdjList(edges: EdgeEntity[], nodeCount: number): void {
-        ArmyManager._adjList = Array.from({ length: nodeCount }, () => []);
-        for (const e of edges) {
-            ArmyManager._adjList[e.nodeAId].push(e.nodeBId);
-            ArmyManager._adjList[e.nodeBId].push(e.nodeAId);
-        }
-    }
-
-    // BFS查找两节点间最短路径（跳数最少），返回节点ID序列，不可达返回null
-    // 返回的值是节点ID数组
-    static findPath(fromNodeId: number, toNodeId: number): number[] | null {
-        if (fromNodeId === toNodeId) return [fromNodeId];
-        if (fromNodeId < 0 || fromNodeId >= ArmyManager._nodeCount) return null;
-        if (toNodeId < 0 || toNodeId >= ArmyManager._nodeCount) return null;
-
-        const visited = new Array<boolean>(ArmyManager._nodeCount).fill(false);
-        const parent = new Array<number>(ArmyManager._nodeCount).fill(-1);
-        const queue: number[] = [fromNodeId];
-        visited[fromNodeId] = true;
-        let head = 0;
-
-        while (head < queue.length) {
-            const cur = queue[head++];
-            for (const nb of ArmyManager._adjList[cur]) {
-                if (visited[nb]) continue;
-                visited[nb] = true;
-                parent[nb] = cur;
-                if (nb === toNodeId) {
-                    // 回溯路径
-                    const path: number[] = [];
-                    let node = toNodeId;
-                    while (node !== -1) {
-                        path.push(node);
-                        node = parent[node];
-                    }
-                    path.reverse();
-                    return path;
-                }
-                queue.push(nb);
-            }
-        }
-        return null; // 不可达
-    }
-
     // 设置军队改道目标。
     // 根据当前军队行进进度判断离哪个端点更近，以该端点为起点计算新路径。
     // - 同向（继续朝当前终点前进）：标记 pendingDestinationNodeId，到达下一节点后自动改道
@@ -191,7 +123,7 @@ export class ArmyManager {
         // 距哪端更近就以哪端为路径起点
         const closerNodeId = army.progress <= 0.5 ? edgeStart : edgeEnd;
 
-        const newPath = ArmyManager.findPath(closerNodeId, destNodeId);
+        const newPath = PathfindingManager.findPath(closerNodeId, destNodeId);
         if (!newPath || newPath.length < 1) return false;
 
         // 判断新路径是否与当前方向一致
@@ -227,7 +159,7 @@ export class ArmyManager {
 
         // 从当前军队所在边的起点出发寻路（军队还在连接该节点的边上）
         const currentPosNodeId = army.currentNodeId;
-        const path = ArmyManager.findPath(currentPosNodeId, destNodeId);
+        const path = PathfindingManager.findPath(currentPosNodeId, destNodeId);
         if (!path) return null;
 
         // 扣除原军队士兵
@@ -266,7 +198,7 @@ export class ArmyManager {
     private static execPendingReroute(army: ArmyEntity, currentNodeId: number): void {
         if (army.pendingDestinationNodeId === null) return;
 
-        const newPath = ArmyManager.findPath(currentNodeId, army.pendingDestinationNodeId);
+        const newPath = PathfindingManager.findPath(currentNodeId, army.pendingDestinationNodeId);
         if (!newPath || newPath.length < 2) {
             // 目标不可达或已是当前节点，取消改道
             army.pendingDestinationNodeId = null;
