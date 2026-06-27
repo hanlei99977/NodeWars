@@ -1,4 +1,4 @@
-import { _decorator, Component, director, Node, Graphics, Color, Label, UITransform, EventTouch, Vec2, Vec3 } from 'cc';
+import { _decorator, Component, director, Node, Graphics, Color, EventTouch, Vec2 } from 'cc';
 import { NodeEntity } from '../entity/NodeEntity';
 import { EdgeEntity } from '../entity/EdgeEntity';
 import { ArmyEntity } from '../entity/ArmyEntity';
@@ -7,6 +7,7 @@ import { GameConfig } from '../config/GameConfig';
 import { MapGenerator, MapGenerateResult } from '../map/MapGenerator';
 import { ArmyManager } from '../manager/ArmyManager';
 import { PathfindingManager } from '../manager/PathfindingManager';
+import { MapViewManager } from '../manager/MapViewManager';
 import { NodeBattleSystem, NodeBattleResult } from '../battle/NodeBattleSystem';
 import { ArmyCollisionSystem } from '../battle/ArmyCollisionSystem';
 import { EconomySystem } from '../economy/EconomySystem';
@@ -53,17 +54,9 @@ export class GameManager extends Component {
     @property(ArmyPanel)
     armyPanel: ArmyPanel | null = null;
 
-    // --- Map Layer ---
-    private _mapLayer: Node | null = null;
-    private _dragSurface: Node | null = null;
-    private _nodeGraphics: (Graphics | null)[] = [];
-    private _nodeOwnerLabels: (Label | null)[] = [];
-    private _nodeWrapperNodes: (Node | null)[] = [];
-    private _edgeNodes: Map<number, Node> = new Map();
-    private _armyViewNodes: Map<number, Node> = new Map();
-    private _dragLastPos: Vec2 | null = null;
-    private _isDragging = false;
-    private _mapBounds = { minX: 0, maxX: 0, minY: 0, maxY: 0 };
+    // --- MapView ---
+    private _mapView!: MapViewManager;
+
     private _pendingSendTroops: { nodeId: number; count: number } | null = null;
     private _pendingArmyRedirect: { armyId: number } | null = null;
 
@@ -96,30 +89,6 @@ export class GameManager extends Component {
     /** 滑动预览线 Graphics（蓝色半透明），跟随手指实时绘制 */
     private _swipePreviewLine: Graphics | null = null;
 
-    private static readonly NODE_RADIUS = 18;// 节点半径
-    private static readonly OWNER_COLORS: Record<string, Color> = {
-        [OwnerType.NEUTRAL]:  new Color(160, 160, 160),
-        [OwnerType.PLAYER]:   new Color(64, 140, 255),
-    };
-    private static readonly EDGE_COLORS: Record<number, Color> = {
-        1: new Color(120, 120, 120),
-        2: new Color(80, 180, 80),
-        3: new Color(255, 180, 40),
-    };
-    private static readonly EDGE_WIDTHS: Record<number, number> = { 1: 2, 2: 4, 3: 6 };
-    private static readonly AI_COLORS: Color[] = [
-        new Color(220, 60, 60),   // 红
-        new Color(220, 180, 20),  // 黄
-        new Color(160, 40, 200),  // 紫
-        new Color(40, 160, 160),  // 青
-        new Color(220, 120, 60),  // 橙
-        new Color(60, 160, 60),   // 绿
-        new Color(200, 60, 140),  // 粉
-        new Color(80, 80, 180),   // 靛
-        new Color(180, 140, 40),  // 棕
-        new Color(120, 180, 60),  // 黄绿
-    ];
-
     // --- 游戏状态 ---
     private _gameState: GameState = GameState.PLAYING;
     private _totalTime = 0;
@@ -148,6 +117,7 @@ export class GameManager extends Component {
 
     // 场景加载后自动启动或打开存档面板
     onLoad(): void {
+        this._mapView = new MapViewManager(this.node);
         if (NewGameConfig.mapSize) {
             this.startGame(
                 NewGameConfig.mapSize,
@@ -164,7 +134,7 @@ export class GameManager extends Component {
     }
 
     onDestroy(): void {
-        this.clearMap();
+        this._mapView.clearMap();
     }
 
     // 公开入口：由 LobbyUI → NewGameConfig 自动触发，也可外部直接调用
@@ -201,7 +171,8 @@ export class GameManager extends Component {
 
         // 重初始化各子系统
         this.initSystems(false);
-        this.renderMap();
+        this._mapView.renderMap(this._nodes, this._edges, this._aiIds);
+        this.wireCallbacks();
         this.wireUI();
         this.changeState(GameState.PLAYING);
     }
@@ -231,7 +202,8 @@ export class GameManager extends Component {
 
         // 3. 初始化各子系统（全新开局）
         this.initSystems(true);
-        this.renderMap();
+        this._mapView.renderMap(this._nodes, this._edges, this._aiIds);
+        this.wireCallbacks();
         this.wireUI();
         this.changeState(GameState.PLAYING);
     }
@@ -318,10 +290,10 @@ export class GameManager extends Component {
         }
 
         // --- 9. 刷新地图视图 ---
-        this.refreshMapViews();
+        this._mapView.refreshNodeViews(this._nodes);
 
         // --- 10. 刷新军队视图 ---
-        this.refreshArmyViews();
+        this._mapView.refreshArmyViews(this._armies);
 
         // --- 11. 自动保存 ---
         this.autoSave();
@@ -436,22 +408,22 @@ export class GameManager extends Component {
 
         EventBus.on(GameEvents.NODE_UPGRADE, (nodeId: number) => {
             NodeUpgradeSystem.startUpgrade(this._nodes[nodeId], OwnerType.PLAYER);
-            this.refreshMapViews();
+            this._mapView.refreshNodeViews(this._nodes);
             if (this.nodePanel) this.nodePanel.refreshPanel();
         });
         EventBus.on(GameEvents.NODE_CONVERT_FORTRESS, (nodeId: number) => {
             NodeConvertSystem.startConvert(this._nodes[nodeId], NodeType.FORTRESS, OwnerType.PLAYER);
-            this.refreshMapViews();
+            this._mapView.refreshNodeViews(this._nodes);
             if (this.nodePanel) this.nodePanel.refreshPanel();
         });
         EventBus.on(GameEvents.NODE_CONVERT_MARKET, (nodeId: number) => {
             NodeConvertSystem.startConvert(this._nodes[nodeId], NodeType.MARKET, OwnerType.PLAYER);
-            this.refreshMapViews();
+            this._mapView.refreshNodeViews(this._nodes);
             if (this.nodePanel) this.nodePanel.refreshPanel();
         });
         EventBus.on(GameEvents.NODE_RECRUIT, (nodeId: number, count: number) => {
             RecruitSystem.startRecruit(this._nodes[nodeId], OwnerType.PLAYER, count);
-            this.refreshMapViews();
+            this._mapView.refreshNodeViews(this._nodes);
             if (this.nodePanel) this.nodePanel.refreshPanel();
         });
         EventBus.on(GameEvents.NODE_SEND_TROOPS, (nodeId: number, count: number) => {
@@ -462,17 +434,17 @@ export class GameManager extends Component {
         });
         EventBus.on(GameEvents.NODE_BATCH_UPGRADE_ALL, () => {
             NodeUpgradeSystem.batchUpgrade(this._nodes, 'all', OwnerType.PLAYER, PathfindingManager.adjList);
-            this.refreshMapViews();
+            this._mapView.refreshNodeViews(this._nodes);
             if (this.nodePanel) this.nodePanel.refreshPanel();
         });
         EventBus.on(GameEvents.NODE_BATCH_UPGRADE_FORTRESS, () => {
             NodeUpgradeSystem.batchUpgrade(this._nodes, 'fortress', OwnerType.PLAYER, PathfindingManager.adjList);
-            this.refreshMapViews();
+            this._mapView.refreshNodeViews(this._nodes);
             if (this.nodePanel) this.nodePanel.refreshPanel();
         });
         EventBus.on(GameEvents.NODE_BATCH_UPGRADE_MARKET, () => {
             NodeUpgradeSystem.batchUpgrade(this._nodes, 'market', OwnerType.PLAYER, PathfindingManager.adjList);
-            this.refreshMapViews();
+            this._mapView.refreshNodeViews(this._nodes);
             if (this.nodePanel) this.nodePanel.refreshPanel();
         });
         EventBus.on(GameEvents.PANEL_CLOSE_NODE, () => {
@@ -484,7 +456,7 @@ export class GameManager extends Component {
             if (!edge) return;
             EdgeUpgradeSystem.upgradeEdge(edge, this._nodes, OwnerType.PLAYER);
             if (this.edgePanel) this.edgePanel.refresh();
-            this.refreshMapViews();
+            this._mapView.refreshNodeViews(this._nodes);
         });
         EventBus.on(GameEvents.PANEL_CLOSE_EDGE, () => {
             if (this.edgePanel) this.edgePanel.node.active = false;
@@ -559,247 +531,21 @@ export class GameManager extends Component {
         this._gameSpeed = speed;
     }
 
-    // ==================== 地图视图 ====================
-
-    // 生成整张地图的视觉表示；MapLayer 负责承载地图内容，拖拽与缩放只影响它
-    private renderMap(): void {
-        this.clearMap();
-
-        // 计算节点包围盒
-        let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
-        for (const n of this._nodes) {
-            if (n.position.x < minX) minX = n.position.x;
-            if (n.position.x > maxX) maxX = n.position.x;
-            if (n.position.y < minY) minY = n.position.y;
-            if (n.position.y > maxY) maxY = n.position.y;
-        }
-        const cx = (minX + maxX) / 2;
-        const cy = (minY + maxY) / 2;
-
-        this._mapBounds = {
-            minX: minX - cx,
-            maxX: maxX - cx,
-            minY: minY - cy,
-            maxY: maxY - cy,
-        };
-
-        // 拖拽感知层（最下层，只捕获地图空白区的触摸）
-        this._dragSurface = new Node('DragSurface');
-        const dsUi = this._dragSurface.addComponent(UITransform);
-        dsUi.setContentSize(2000, 2000);
-        this.node.addChild(this._dragSurface);
-        this._dragSurface.setSiblingIndex(0);
-
-        this._dragSurface.on(Node.EventType.TOUCH_START, (e: EventTouch) => {
-            if (this._pendingSendTroops || this._pendingArmyRedirect) {
-                this._cancelPendingModes();
-                return;
-            }
-            this._isDragging = true;
-            this._dragLastPos = e.getUILocation();
-        });
-        this._dragSurface.on(Node.EventType.TOUCH_MOVE, (e: EventTouch) => {
-            if (!this._isDragging || !this._dragLastPos || !this._mapLayer) return;
-            const cur = e.getUILocation();
-            const dx = cur.x - this._dragLastPos.x;
-            const dy = cur.y - this._dragLastPos.y;
-            this._dragLastPos.set(cur.x, cur.y);
-            const s = this._mapLayer.scale.x;
-            const p = this._mapLayer.position;
-            this._mapLayer.setPosition(p.x + dx / s, p.y + dy / s, p.z);
-            this._clampMapLayer();
-        });
-        this._dragSurface.on(Node.EventType.TOUCH_END, () => {
-            this._isDragging = false;
-            this._dragLastPos = null;
-        });
-
-        // MapLayer（在上层，包含地图节点/边/军队）
-        this._mapLayer = new Node('MapLayer');
-        this._mapLayer.setPosition(-cx, -cy, 0);
-        this.node.addChild(this._mapLayer);
-
-        for (const edge of this._edges) {
-            this.createEdgeGraphic(edge);
-        }
-
-        this._nodeGraphics = new Array(this._nodes.length).fill(null);
-        this._nodeOwnerLabels = new Array(this._nodes.length).fill(null);
-        this._nodeWrapperNodes = new Array(this._nodes.length).fill(null);
-
-        for (const n of this._nodes) {
-            this.createNodeGraphic(n);
-        }
-    }
-
-    // MapLayer 边界限制
-    private _clampMapLayer(): void {
-        if (!this._mapLayer) return;
-        const ml = this._mapLayer;
-        const s = ml.scale.x;
-        // 留少许 margin 让地图不全贴边
-        const margin = 400;
-        const p = ml.position;
-        const nx = Math.max(this._mapBounds.minX - margin, Math.min(this._mapBounds.maxX + margin, p.x));
-        const ny = Math.max(this._mapBounds.minY - margin, Math.min(this._mapBounds.maxY + margin, p.y));
-        ml.setPosition(nx, ny, p.z);
-    }
-
-    // 清除旧地图
-    private clearMap(): void {
-        console.log(`开始清除旧地图数据...`);
-        this._armyViewNodes.forEach(n => n.destroy());
-        this._armyViewNodes.clear();
-        this._edgeNodes.forEach(n => n.destroy());
-        this._edgeNodes.clear();
-        if (this._mapLayer) {
-            this._mapLayer.destroy();
-            this._mapLayer = null;
-        }
-        if (this._dragSurface) {
-            this._dragSurface.destroy();
-            this._dragSurface = null;
-        }
-        this._nodeGraphics = [];
-        this._nodeOwnerLabels = [];
-        this._nodeWrapperNodes = [];
-        this._isDragging = false;
-        this._dragLastPos = null;
-        this.clearSwipePreview();
-        this._autoDispatchMap.clear();
-        this._autoDispatchCooldown.clear();
-        this._autoDispatchLines.clear();
-        console.log(`清除成功`);
-    }
-
-    // 创建一条线段的视觉节点（可点击弹出 EdgePanel）
-    private createEdgeGraphic(edge: EdgeEntity): void {
-        const wrapper = new Node(`Edge_${edge.id}`);
-        const posA = this._nodes[edge.nodeAId].position;
-        const posB = this._nodes[edge.nodeBId].position;
-        const midX = (posA.x + posB.x) / 2;
-        const midY = (posA.y + posB.y) / 2;
-        const dx = posB.x - posA.x;
-        const dy = posB.y - posA.y;
-        const len = Math.sqrt(dx * dx + dy * dy);
-        const angle = Math.atan2(dy, dx) * (180 / Math.PI);
-        const ui = wrapper.addComponent(UITransform);
-        ui.setContentSize(len + 20, 28);
-        wrapper.setPosition(midX, midY, 0);
-        wrapper.setRotationFromEuler(0, 0, angle);
-
-        // 绘制线段
-        const gNode = new Node('Line');
-        const g = gNode.addComponent(Graphics);
-        g.strokeColor = GameManager.EDGE_COLORS[edge.level] || GameManager.EDGE_COLORS[1];
-        g.lineWidth = GameManager.EDGE_WIDTHS[edge.level] || 2;
-        g.moveTo(-len / 2, 0);
-        g.lineTo(len / 2, 0);
-        g.stroke();
-        wrapper.addChild(gNode);
-
-        // 点击 → EdgePanel
-        wrapper.on(Node.EventType.TOUCH_START, (e: EventTouch) => {
-            e.propagationStopped = true;
-            this.onEdgeClicked(edge.id);
-        });
-
-        this._edgeNodes.set(edge.id, wrapper);
-        this._mapLayer!.addChild(wrapper);
-    }
-
-    // 为一个节点创建圆形图形 + 信息标签 + 点击事件
-    private createNodeGraphic(n: NodeEntity): void {
-        const wrapper = new Node(`Node_${n.id}`);
-        wrapper.setPosition(n.position.x, n.position.y, 0);
-        const ui = wrapper.addComponent(UITransform);
-        ui.setContentSize(GameManager.NODE_RADIUS * 2 + 12, GameManager.NODE_RADIUS * 2 + 12);
-
-        // 圆形 Graphics
-        const circle = new Node('Circle');
-        const cg = circle.addComponent(Graphics);
-        const color = this.getOwnerColor(n.ownerId);
-        cg.fillColor = color;
-        cg.strokeColor = new Color(40, 40, 40);
-        cg.lineWidth = 1.5;
-        cg.circle(0, 0, GameManager.NODE_RADIUS);
-        cg.fill();
-        cg.stroke();
-        wrapper.addChild(circle);
-        this._nodeGraphics[n.id] = cg;
-
-        // 等级标签（正上方）
-        const lvlLabel = new Node('LevelLabel');
-        const lvlL = lvlLabel.addComponent(Label);
-        lvlL.string = `Lv${n.level}`;
-        lvlL.fontSize = 14;
-        lvlL.color = Color.WHITE;
-        lvlLabel.getComponent(UITransform)!.setContentSize(50, 20);
-        lvlLabel.setPosition(0, GameManager.NODE_RADIUS + 12, 0);
-        wrapper.addChild(lvlLabel);
-
-        // 驻军/所有者标签（正下方）
-        const infoLabel = new Node('InfoLabel');
-        const infoL = infoLabel.addComponent(Label);
-        infoL.string = `${n.garrisonCount}`;
-        infoL.fontSize = 13;
-        infoL.color = new Color(220, 220, 220);
-        infoLabel.getComponent(UITransform)!.setContentSize(80, 22);
-        infoLabel.setPosition(0, -GameManager.NODE_RADIUS - 14, 0);
-        wrapper.addChild(infoLabel);
-        this._nodeOwnerLabels[n.id] = infoL;
-
-        // ======================== 节点触摸交互 ========================
-        // 短按（无滑动）→ 打开 NodePanel / 处理待派兵改道
-        // 滑动（从己方节点拖出）→ 建立/取消/替换自动派遣
-        // 滑动回到自身 → 无操作
-        let touchStartPos = new Vec2();          // 触摸起始 UI 坐标
-        let hasMoved = false;                    // 本次触摸是否已判定为滑动
-        const SWIPE_THRESHOLD = 15;              // 滑动触发阈值（像素）
-
-        wrapper.on(Node.EventType.TOUCH_START, (e: EventTouch) => {
-            e.propagationStopped = true;
-            touchStartPos.set(e.getUILocation());
-            hasMoved = false;
-        });
-
-        wrapper.on(Node.EventType.TOUCH_MOVE, (e: EventTouch) => {
-            const cur = e.getUILocation();
-            
-            const dx = cur.x - touchStartPos.x;
-            const dy = cur.y - touchStartPos.y;
-            // 如果移动距离过小，则不触发滑动
-            if (Math.abs(dx) < SWIPE_THRESHOLD && Math.abs(dy) < SWIPE_THRESHOLD) return;
-
-            if (!hasMoved) {
-                hasMoved = true;
-                console.log(`检测到滑动操作`);
-                console.log(`(${cur.x},${cur.y})`)
-                if (n.ownerId === OwnerType.PLAYER) {
-                    this.onSwipeStart(n.id, touchStartPos);
-                }
-            }
-            if (this._swipeActive) {
-                this.onSwipeMove(e);
-            }
-        });
-
-        wrapper.on(Node.EventType.TOUCH_CANCEL, (e: EventTouch) => {
-            console.log(`滑动操作结束`)
-            if (hasMoved && this._swipeActive) {
-                    this.onSwipeEnd(e);
-            } 
-        });
-
-        wrapper.on(Node.EventType.TOUCH_END, (e: EventTouch) => {
-            if (!hasMoved) {
-                this.onNodeClicked(n.id);
-            }
-        });
-
-
-        this._mapLayer!.addChild(wrapper);
-        this._nodeWrapperNodes[n.id] = wrapper;
+    /**
+     * 绑定 MapViewManager 的所有回调接口
+     *
+     * 作用：将 MapViewManager 的触摸/点击事件桥接到 GameManager 的处理方法
+     *
+     * @returns 无
+     */
+    private wireCallbacks(): void {
+        this._mapView.onNodeClicked = (nodeId) => this.onNodeClicked(nodeId);
+        this._mapView.onEdgeClicked = (edgeId) => this.onEdgeClicked(edgeId);
+        this._mapView.onArmyClicked = (armyId) => this.onArmyClicked(armyId);
+        this._mapView.onSwipeStart = (nodeId, pos) => this.onSwipeStart(nodeId, pos);
+        this._mapView.onSwipeMove = (e) => this.onSwipeMove(e);
+        this._mapView.onSwipeEnd = (e) => this.onSwipeEnd(e);
+        this._mapView.onBlankAreaTap = () => this._cancelPendingModes();
     }
 
     // 点击某个节点 → 弹出 NodePanel 并绑定数据, 或处理待派兵/改道
@@ -829,127 +575,7 @@ export class GameManager extends Component {
         this.nodePanel.bindToEntity(node, OwnerType.PLAYER);
         this.nodePanel.node.active = true;
 
-        this.refreshMapViews();
-    }
-
-    // 每帧刷新节点颜色 / 标签 (针对迷雾 & 状态变更)
-    private refreshMapViews(): void {
-        for (let i = 0; i < this._nodes.length; i++) {
-            const n = this._nodes[i];
-            const g = this._nodeGraphics[i];
-            const lbl = this._nodeOwnerLabels[i];
-            if (!g || !lbl) continue;
-
-            const visible = FogSystem.isNodeExplored(n.id, OwnerType.PLAYER);
-
-            g.clear();
-
-            if (visible) {
-                const color = this.getOwnerColor(n.ownerId);
-                g.fillColor = color;
-                g.strokeColor = new Color(40, 40, 40);
-                g.lineWidth = 1.5;
-                g.circle(0, 0, GameManager.NODE_RADIUS);
-                g.fill();
-                g.stroke();
-
-                lbl.string = FogSystem.isNodeCurrentlyVisible(n.id, OwnerType.PLAYER)
-                    ? `${n.garrisonCount}` : `?`;
-            } else {
-                g.fillColor = new Color(60, 60, 60);
-                g.strokeColor = new Color(40, 40, 40);
-                g.lineWidth = 1.5;
-                g.circle(0, 0, GameManager.NODE_RADIUS);
-                g.fill();
-                g.stroke();
-
-                lbl.string = '';
-            }
-        }
-    }
-
-    // 每帧刷新军队视图：新生军队创建视图，消亡军队销毁视图
-    private refreshArmyViews(): void {
-        // 移除不存在的军队视图
-        const aliveIds = new Set(this._armies.map(a => a.id));
-        for (const [id, vn] of this._armyViewNodes.entries()) {
-            if (!aliveIds.has(id)) {
-                vn.destroy();
-                this._armyViewNodes.delete(id);
-            }
-        }
-
-        // 为新生军队创建视图并每帧更新位置
-        for (const a of this._armies) {
-            let vn = this._armyViewNodes.get(a.id);
-            if (!vn) {
-                vn = this.createArmyGraphic(a);
-                this._armyViewNodes.set(a.id, vn);
-            }
-            this.updateArmyPosition(vn, a);
-        }
-    }
-
-    // 创建一支军队视图节点（可点击弹出 ArmyPanel）
-    private createArmyGraphic(army: ArmyEntity): Node {
-        const vn = new Node(`Army_${army.id}`);
-        const vnUi = vn.addComponent(UITransform);
-        vnUi.setContentSize(30, 30);
-
-        const g = vn.addComponent(Graphics);
-        const color = this.getOwnerColor(army.ownerId);
-        g.fillColor = color;
-        g.strokeColor = new Color(30, 30, 30);
-        g.lineWidth = 1;
-        g.circle(0, 0, 8);
-        g.fill();
-        g.stroke();
-
-        // 人数标签
-        const lblNode = new Node('Label');
-        lblNode.setPosition(0, -14, 0);
-        const lbl = lblNode.addComponent(Label);
-        lbl.string = `${army.soldierCount}`;
-        lbl.fontSize = 12;
-        lbl.color = Color.WHITE;
-        lbl.node.getComponent(UITransform)!.setContentSize(50, 18);
-        vn.addChild(lblNode);
-
-        // 点击 → ArmyPanel
-        vn.on(Node.EventType.TOUCH_START, (e: EventTouch) => {
-            e.propagationStopped = true;
-            this.onArmyClicked(army.id);
-        });
-
-        this._mapLayer!.addChild(vn);
-        return vn;
-    }
-
-    // 计算军队在边上的位置
-    private updateArmyPosition(vn: Node, army: ArmyEntity): void {
-        if (army.currentEdgeIndex >= army.pathNodeIds.length - 1) return;
-        const nodeA = this._nodes[army.pathNodeIds[army.currentEdgeIndex]];
-        const nodeB = this._nodes[army.pathNodeIds[army.currentEdgeIndex + 1]];
-        if (!nodeA || !nodeB) return;
-        const t = army.progress;
-        vn.setPosition(
-            nodeA.position.x + (nodeB.position.x - nodeA.position.x) * t,
-            nodeA.position.y + (nodeB.position.y - nodeA.position.y) * t,
-            0,
-        );
-    }
-
-    // 获取 ownerId 对应的显示颜色
-    private getOwnerColor(ownerId: string): Color {
-        if (ownerId === OwnerType.NEUTRAL)  return GameManager.OWNER_COLORS[OwnerType.NEUTRAL];
-        if (ownerId === OwnerType.PLAYER)   return GameManager.OWNER_COLORS[OwnerType.PLAYER];
-        if (GameManager.OWNER_COLORS[ownerId]) return GameManager.OWNER_COLORS[ownerId];
-        // AI: 用 aiId 对应的索引取颜色
-        const aiIdx = this._aiIds.indexOf(ownerId);
-        if (aiIdx >= 0 && aiIdx < GameManager.AI_COLORS.length) {
-            return GameManager.AI_COLORS[aiIdx];
-        }
-        return new Color(200, 60, 60);
+        this._mapView.refreshNodeViews(this._nodes);
     }
 
     // 点击线路 → EdgePanel
@@ -1055,13 +681,12 @@ export class GameManager extends Component {
      */
     private onSwipeMove(e: EventTouch): void {
          console.log(`滑动移动回调`);
-        if (!this._mapLayer) return;
+        if (!this._mapView.mapLayer) return;
         const curPos = e.getUILocation();
-        // UI坐标本质就是世界坐标，转Vec3后反向变换得到本地坐标
-        const localPos = new Vec3();
-        this._mapLayer.inverseTransformPoint(localPos,new Vec3(curPos.x, curPos.y, 0));
-        const mapX = localPos.x;
-        const mapY = localPos.y;
+        const mapPos = this._mapView.uiToMapPos(curPos.x, curPos.y);
+        if (!mapPos) return;
+        const mapX = mapPos.x;
+        const mapY = mapPos.y;
 
         const srcNode = this._nodes[this._swipeSourceNodeId];
         if (!srcNode) return;
@@ -1090,13 +715,12 @@ export class GameManager extends Component {
      * @returns 无
      */
     private onSwipeEnd(e: EventTouch): void {
-        if (!this._mapLayer) { this.endSwipe(); return; }
+        if (!this._mapView.mapLayer) { this.endSwipe(); return; }
         const curPos = e.getUILocation();
-        // UI坐标本质就是世界坐标，转Vec3后反向变换得到本地坐标
-        const localPos = new Vec3();
-        this._mapLayer.inverseTransformPoint(localPos,new Vec3(curPos.x, curPos.y, 0));
-        const mapX = localPos.x;
-        const mapY = localPos.y;
+        const mapPos = this._mapView.uiToMapPos(curPos.x, curPos.y);
+        if (!mapPos) { this.endSwipe(); return; }
+        const mapX = mapPos.x;
+        const mapY = mapPos.y;
 
         const nearNodeId = this.findNodeAtMapPos(mapX, mapY);
         console.log(`滑动操作结束;滑动结束位置为：X: ${mapX} Y:${mapY},附近节点ID：${nearNodeId}`);
@@ -1141,7 +765,7 @@ export class GameManager extends Component {
      */
     private findNodeAtMapPos(mapX: number, mapY: number): number {
         // 命中半径 = 节点半径 + 20px 容差
-        const HIT_RADIUS = GameManager.NODE_RADIUS + 20;
+        const HIT_RADIUS = MapViewManager.NODE_RADIUS + 20;
         for (const node of this._nodes) {
             const dx = node.position.x - mapX;
             const dy = node.position.y - mapY;
@@ -1251,7 +875,7 @@ export class GameManager extends Component {
      * @returns 无
      */
     private drawAutoDispatchLine(srcNodeId: number, tgtNodeId: number): void {
-        if (!this._mapLayer) return;
+        if (!this._mapView.mapLayer) return;
         this.removeAutoDispatchLine(srcNodeId);
 
         const src = this._nodes[srcNodeId];
@@ -1288,7 +912,7 @@ export class GameManager extends Component {
         );
         g.stroke();
 
-        this._mapLayer.addChild(lineNode);
+        this._mapView.mapLayer!.addChild(lineNode);
         this._autoDispatchLines.set(srcNodeId, g);
     }
 
@@ -1322,7 +946,7 @@ export class GameManager extends Component {
      */
     private drawSwipePreview(x1: number, y1: number, x2: number, y2: number): void {
         this.clearSwipePreview();
-        if (!this._mapLayer) return;
+        if (!this._mapView.mapLayer) return;
         const lineNode = new Node('SwipePreview');
         const g = lineNode.addComponent(Graphics);
         g.strokeColor = new Color(100, 200, 255, 180);
@@ -1330,7 +954,7 @@ export class GameManager extends Component {
         g.moveTo(x1, y1);
         g.lineTo(x2, y2);
         g.stroke();
-        this._mapLayer.addChild(lineNode);
+        this._mapView.mapLayer!.addChild(lineNode);
         // 确保预览线渲染在所有地图元素最上层
         lineNode.setSiblingIndex(9999);
         this._swipePreviewLine = g;
@@ -1373,7 +997,7 @@ export class GameManager extends Component {
         console.log(`[GameManager] 派兵: 节点#${srcNodeId} → #${targetNodeId}, 数量=${count}, 路径=${path.join('→')}`);
         srcNode.garrisonCount -= count;
         ArmyManager.createArmy(OwnerType.PLAYER, count, path);
-        this.refreshMapViews();
+        this._mapView.refreshNodeViews(this._nodes);
     }
 
     private _redirectArmy(armyId: number, targetNodeId: number): void {
