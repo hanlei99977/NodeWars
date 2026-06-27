@@ -155,6 +155,12 @@ export class GameEventBinder {
             if (ctx.nodePanel) ctx.nodePanel.refreshPanel();
         });
 
+        EventBus.on(GameEvents.NODE_BATCH_CONVERT_ALL, () => {
+            NodeConvertSystem.autoConvertBuildings( OwnerType.PLAYER, ctx.nodes);
+            ctx.mapView.refreshNodeViews(ctx.nodes);
+            if (ctx.nodePanel) ctx.nodePanel.refreshPanel();
+        });
+
         EventBus.on(GameEvents.PANEL_CLOSE_NODE, () => {
             if (ctx.nodePanel) ctx.nodePanel.node.active = false;
         });

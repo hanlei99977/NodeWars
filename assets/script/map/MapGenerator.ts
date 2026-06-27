@@ -37,6 +37,13 @@ export class MapGenerator {
         return MapGenerator.doGenerate(params);
     }
 
+    // 全局邻接表
+    private static _adjList: number[][] = [];
+
+    static get adjList(): number[][] {
+        return MapGenerator._adjList;
+    }
+
     // 根据地图大小获取宽高和边距参数
     private static getParams(mapSize: MapSize, aiCount: number): MapGenerateParams {
         switch (mapSize) {
@@ -60,12 +67,12 @@ export class MapGenerator {
             // 3.添加额外边以丰富拓扑
             edges = MapGenerator.addExtraEdges(edges, positions, params.nodeCount);
             // 4.构建邻接表用于后续跳数计算
-            const adjList = MapGenerator.buildAdjList(edges, params.nodeCount);
+            MapGenerator._adjList = MapGenerator.buildAdjList(edges, params.nodeCount);
             // 5.选择出生点（满足3跳间距）
-            const birthIds = MapGenerator.selectBirths(adjList, params.nodeCount, params.aiCount + 1); // +1为玩家
+            const birthIds = MapGenerator.selectBirths(MapGenerator.adjList, params.nodeCount, params.aiCount + 1); // +1为玩家
             if (!birthIds) continue; // 无法满足约束，重试
             // 6.校验3跳资源平衡
-            const balanceOk = MapGenerator.checkBirthBalance(adjList, positions, params.nodeCount, birthIds);
+            const balanceOk = MapGenerator.checkBirthBalance(MapGenerator.adjList, positions, params.nodeCount, birthIds);
             if (!balanceOk) continue;
             // 7.分配属性生成节点
             const playerNodeId = birthIds[0];
@@ -73,7 +80,7 @@ export class MapGenerator {
             // 根据出生点分配节点属性，保证玩家和AI出生点属性相似，其他中立节点随机分布等级和特殊类型
             const nodes = MapGenerator.buildNodes(positions, params.nodeCount, playerNodeId, aiNodeIds);
             // 8.特殊节点分配
-            MapGenerator.assignSpecialNodes(nodes, adjList, playerNodeId, aiNodeIds);
+            MapGenerator.assignSpecialNodes(nodes, MapGenerator.adjList, playerNodeId, aiNodeIds);
             return new MapGenerateResult(nodes, edges, playerNodeId, aiNodeIds);
         }
         // 兜底：去约束直接生成
@@ -383,8 +390,8 @@ export class MapGenerator {
         const playerNodeId = birthIds[0];
         const aiNodeIds = birthIds.slice(1);
         const nodes = MapGenerator.buildNodes(positions, params.nodeCount, playerNodeId, aiNodeIds);
-        const adjList = MapGenerator.buildAdjList(edges, params.nodeCount);
-        MapGenerator.assignSpecialNodes(nodes, adjList, playerNodeId, aiNodeIds);
+        MapGenerator._adjList = MapGenerator.buildAdjList(edges, params.nodeCount);
+        MapGenerator.assignSpecialNodes(nodes, MapGenerator.adjList, playerNodeId, aiNodeIds);
         return new MapGenerateResult(nodes, edges, playerNodeId, aiNodeIds);
     }
 }

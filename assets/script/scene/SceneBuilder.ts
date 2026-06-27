@@ -291,6 +291,7 @@ export class SceneBuilder extends Component {
         makeBtn(p, 'N_BatchAll', '批量升级全部', 0, y, 180, rowH, 24);             y -= rowH + 8;
         makeBtn(p, 'N_BatchFort', '批量升级要塞', 0, y, 180, rowH, 24);            y -= rowH + 8;
         makeBtn(p, 'N_BatchMarket', '批量升级市场', 0, y, 180, rowH, 24);          y -= rowH + 8;
+        makeBtn(p, 'N_BatchConvert', '批量转换节点', 0, y, 180, rowH, 24);          y -= rowH + 8;
         makeBtn(p, 'N_Close', '关闭', 0, y, 180, rowH, 24);
     }
     // ======================== NodePanel 绑定 ========================
@@ -323,6 +324,7 @@ export class SceneBuilder extends Component {
         np.batchUpgradeAllBtn     = g('N_BatchAll')?.getComponent(Button) ?? null;
         np.batchUpgradeFortressBtn = g('N_BatchFort')?.getComponent(Button) ?? null;
         np.batchUpgradeMarketBtn  = g('N_BatchMarket')?.getComponent(Button) ?? null;
+        np.batchConvertAllBtn  = g('N_BatchConvert')?.getComponent(Button) ?? null;
 
         bindClick(np.upgradeBtn!, p, 'NodePanel', 'onUpgradeClicked');
         bindClick(np.convertToFortressBtn!, p, 'NodePanel', 'onConvertToFortressClicked');
@@ -340,6 +342,7 @@ export class SceneBuilder extends Component {
         bindClick(np.batchUpgradeAllBtn!, p, 'NodePanel', 'onBatchUpgradeAllClicked');
         bindClick(np.batchUpgradeFortressBtn!, p, 'NodePanel', 'onBatchUpgradeFortressClicked');
         bindClick(np.batchUpgradeMarketBtn!, p, 'NodePanel', 'onBatchUpgradeMarketClicked');
+        bindClick(np.batchConvertAllBtn!, p, 'NodePanel', 'onBatchConvertAllClicked');
     }
 
     // --- SaveSlotsUI 子节点 ---

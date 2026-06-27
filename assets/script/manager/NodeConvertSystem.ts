@@ -2,6 +2,9 @@ import { NodeEntity, ConvertTask } from '../entity/NodeEntity';
 import { NodeType, ConvertTaskState, ConvertEventType } from '../config/EnumDefine';
 import { NodeConfig } from '../config/NodeConfig';
 import { EconomySystem } from '../economy/EconomySystem';
+import { OwnerType, AIAllianceState } from '../config/EnumDefine'
+import { AIController } from '../ai/AIController';
+import { MapGenerator } from '../map/MapGenerator';
 
 // 转换事件数据
 export class ConvertEvent {
@@ -41,6 +44,40 @@ export class NodeConvertSystem {
         node.convertTask.state = ConvertTaskState.IN_PROGRESS;
 
         return new ConvertEvent(ConvertEventType.STARTED, node.id, targetType);
+    }
+
+    // 自动建筑转换：有敌军相邻节点 → 要塞，无敌军相邻 → 市场
+    static autoConvertBuildings(playerId: string, nodes: NodeEntity[]): void {
+        const ownNodes = nodes.filter(n => n.ownerId === playerId);
+        for (const node of ownNodes) {
+            if (!node.isIdle) continue; // 忙碌中跳过
+
+            const hasEnemyNeighbor = this.hasEnemyNeighbor(node.id, playerId, nodes);
+            const targetType = hasEnemyNeighbor ? NodeType.FORTRESS : NodeType.MARKET;
+            if (node.type === targetType) continue; // 已是目标类型
+
+            // 金币够才转换
+            if (EconomySystem.canAfford(playerId, NodeConfig.CONVERT_GOLD)) {
+                NodeConvertSystem.startConvert(node, targetType, playerId);
+            }
+        }
+    }
+    
+    // 检查某节点是否有敌军相邻（用于建筑转换判断）
+    private static hasEnemyNeighbor(nodeId: number, playerId: string, nodes: NodeEntity[]): boolean {
+        // 遍历与当前节点连接的节点
+        for (const nb of MapGenerator.adjList[nodeId]) {
+            const neighbor = nodes[nb];
+            if (!neighbor) continue;
+            if (neighbor.ownerId === OwnerType.NEUTRAL) continue;
+            if (neighbor.ownerId === playerId) continue;
+            // 同盟时不把其他AI视为敌人
+            if (playerId !== OwnerType.PLAYER && AIController.allianceState !== AIAllianceState.FREE) {
+                if (neighbor.ownerId !==OwnerType.PLAYER) continue;
+            }
+            return true;
+        }
+        return false;
     }
 
     // 每帧推进所有节点的转换任务，完成时修改节点类型

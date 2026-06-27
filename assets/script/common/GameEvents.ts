@@ -9,6 +9,7 @@ export const GameEvents = {
     NODE_BATCH_UPGRADE_ALL:      'node:batchUpgradeAll',
     NODE_BATCH_UPGRADE_FORTRESS: 'node:batchUpgradeFortress',
     NODE_BATCH_UPGRADE_MARKET:   'node:batchUpgradeMarket',
+    NODE_BATCH_CONVERT_ALL:     'node:batchConvertAll',
 
     // --- 线路操作（UI → GameManager） ---
     EDGE_UPGRADE: 'edge:upgrade',

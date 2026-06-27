@@ -115,6 +115,10 @@ export class NodePanel extends Component {
     @property(Button)
     batchUpgradeMarketBtn: Button | null = null;   // 批量升级所有市场
 
+     // --- 批量转换 ---
+    @property(Button)
+    batchConvertAllBtn: Button | null = null;   // 批量转换所有节点
+
     // --- 内部状态 ---
     private _entity: NodeEntity | null = null;
     private _ownerId: string = '';
@@ -295,6 +299,12 @@ export class NodePanel extends Component {
         EventBus.emit(GameEvents.NODE_BATCH_UPGRADE_MARKET);
     }
 
+    // 批量转换所有节点
+    onBatchConvertAllClicked():void{
+        console.log(`批量转换节点`);
+        EventBus.emit(GameEvents.NODE_BATCH_CONVERT_ALL);
+    }
+
     // 自动征兵阈值 -100
     onAutoRecruitPrevClicked(): void {
         if (!this._entity) return;
@@ -377,6 +387,7 @@ export class NodePanel extends Component {
             this.troopPrevBtn, this.troopNextBtn, this.sendTroopsBtn,
             this.autoRecruitPrevBtn, this.autoRecruitNextBtn, this.autoRecruitToggleBtn,
             this.batchUpgradeAllBtn, this.batchUpgradeFortressBtn, this.batchUpgradeMarketBtn,
+            this.batchConvertAllBtn, this.batchUpgradeFortressBtn, this.batchConvertAllBtn,
         ];
         for (const btn of btns) {
             if (btn && btn.node) btn.node.active = visible;

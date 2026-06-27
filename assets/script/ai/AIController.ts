@@ -13,6 +13,7 @@ import { NodeConvertSystem } from '../manager/NodeConvertSystem';
 import { EdgeUpgradeSystem } from '../manager/EdgeUpgradeSystem';
 import { ArmyManager } from '../manager/ArmyManager';
 import { PathfindingManager } from '../manager/PathfindingManager';
+import { MapGenerator } from '../map/MapGenerator';
 
 // AI思考结果（供外层记录日志/调试）
 export class AIThinkResult {
@@ -53,11 +54,7 @@ export class AIController {
             AIController._thinkTimer.set(aiId, Math.random() * AIController._thinkInterval);
         }
         // 构建邻接表
-        AIController._adjList = Array.from({ length: nodes.length }, () => []);
-        for (const e of edges) {
-            AIController._adjList[e.nodeAId].push(e.nodeBId);
-            AIController._adjList[e.nodeBId].push(e.nodeAId);
-        }
+        AIController._adjList = MapGenerator.adjList;
     }
 
     // 获取当前联盟状态
@@ -126,7 +123,7 @@ export class AIController {
         }
 
         // 1.自动建筑转换：前线→要塞，后方→市场
-        AIController.autoConvertBuildings(aiId, nodes);
+        NodeConvertSystem.autoConvertBuildings(aiId, nodes);
 
         // 2.征兵
         AIController.autoRecruit(aiId, nodes);
@@ -159,23 +156,6 @@ export class AIController {
         }
 
         return result;
-    }
-
-    // 自动建筑转换：有敌军相邻节点 → 要塞，无敌军相邻 → 市场
-    private static autoConvertBuildings(aiId: string, nodes: NodeEntity[]): void {
-        const ownNodes = nodes.filter(n => n.ownerId === aiId);
-        for (const node of ownNodes) {
-            if (!node.isIdle) continue; // 忙碌中跳过
-
-            const hasEnemyNeighbor = AIController.hasEnemyNeighbor(node.id, aiId, nodes);
-            const targetType = hasEnemyNeighbor ? NodeType.FORTRESS : NodeType.MARKET;
-            if (node.type === targetType) continue; // 已是目标类型
-
-            // 金币够才转换
-            if (EconomySystem.canAfford(aiId, NodeConfig.CONVERT_GOLD)) {
-                NodeConvertSystem.startConvert(node, targetType, aiId);
-            }
-        }
     }
 
     // 自动征兵：每个己方节点尽量征兵（征兵队列未满、金币够）
@@ -368,22 +348,5 @@ export class AIController {
             }
             return true;
         });
-    }
-
-    // 检查某节点是否有敌军相邻（用于建筑转换判断）
-    private static hasEnemyNeighbor(nodeId: number, aiId: string, nodes: NodeEntity[]): boolean {
-        // 遍历与当前节点连接的节点
-        for (const nb of AIController._adjList[nodeId]) {
-            const neighbor = nodes[nb];
-            if (!neighbor) continue;
-            if (neighbor.ownerId === OwnerType.NEUTRAL) continue;
-            if (neighbor.ownerId === aiId) continue;
-            // 同盟时不把其他AI视为敌人
-            if (AIController._allianceState !== AIAllianceState.FREE) {
-                if (neighbor.ownerId !== AIController._playerId) continue;
-            }
-            return true;
-        }
-        return false;
     }
 }
