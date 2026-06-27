@@ -1,20 +1,20 @@
-import { _decorator, Component, director, Node, Graphics, Color, EventTouch, Vec2 } from 'cc';
+import { _decorator, Component,Node, Graphics, Color, EventTouch, Vec2 } from 'cc';
 import { NodeEntity } from '../entity/NodeEntity';
 import { EdgeEntity } from '../entity/EdgeEntity';
 import { ArmyEntity } from '../entity/ArmyEntity';
-import { GameState, MapSize, Difficulty, FogMode, GameSpeed, OwnerType, ArmyState, NodeBattleOutcome, AIAllianceState, NodeType } from '../config/EnumDefine';
+import { GameState, MapSize, Difficulty, FogMode, GameSpeed, OwnerType, ArmyState, AIAllianceState } from '../config/EnumDefine';
 import { GameConfig } from '../config/GameConfig';
 import { MapGenerator, MapGenerateResult } from '../map/MapGenerator';
 import { ArmyManager } from '../manager/ArmyManager';
 import { PathfindingManager } from '../manager/PathfindingManager';
 import { MapViewManager } from '../manager/MapViewManager';
-import { NodeBattleSystem, NodeBattleResult } from '../battle/NodeBattleSystem';
+import { GameEventBinder } from '../manager/GameEventBinder';
+import { NodeBattleSystem } from '../battle/NodeBattleSystem';
 import { ArmyCollisionSystem } from '../battle/ArmyCollisionSystem';
 import { EconomySystem } from '../economy/EconomySystem';
 import { RecruitSystem } from '../recruit/RecruitSystem';
 import { NodeUpgradeSystem } from '../manager/NodeUpgradeSystem';
 import { NodeConvertSystem } from '../manager/NodeConvertSystem';
-import { EdgeUpgradeSystem } from '../manager/EdgeUpgradeSystem';
 import { AIController } from '../ai/AIController';
 import { FogSystem } from '../fog/FogSystem';
 import { EventSystem } from '../event/EventSystem';
@@ -26,8 +26,6 @@ import { NewGameConfig } from '../ui/LobbyUI';
 import { NodePanel } from '../ui/NodePanel';
 import { EdgePanel } from '../ui/EdgePanel';
 import { ArmyPanel } from '../ui/ArmyPanel';
-import { EventBus } from '../common/EventBus';
-import { GameEvents } from '../common/GameEvents';
 
 const { ccclass, property } = _decorator;
 
@@ -402,104 +400,31 @@ export class GameManager extends Component {
         }
     }
 
-    // 连接 HUD / SaveSlotsUI / GameOverUI 的回调
+    /**
+     * 委托 GameEventBinder 绑定所有 EventBus 事件
+     *
+     * 构造 GameEventContext 上下文对象，传入 GameEventBinder.bindAll()，
+     * 由 GameEventBinder 统一管理所有 EventBus 监听的注册。
+     *
+     * @returns 无
+     */
     private wireUI(): void {
-        EventBus.removeAll();
-
-        EventBus.on(GameEvents.NODE_UPGRADE, (nodeId: number) => {
-            NodeUpgradeSystem.startUpgrade(this._nodes[nodeId], OwnerType.PLAYER);
-            this._mapView.refreshNodeViews(this._nodes);
-            if (this.nodePanel) this.nodePanel.refreshPanel();
-        });
-        EventBus.on(GameEvents.NODE_CONVERT_FORTRESS, (nodeId: number) => {
-            NodeConvertSystem.startConvert(this._nodes[nodeId], NodeType.FORTRESS, OwnerType.PLAYER);
-            this._mapView.refreshNodeViews(this._nodes);
-            if (this.nodePanel) this.nodePanel.refreshPanel();
-        });
-        EventBus.on(GameEvents.NODE_CONVERT_MARKET, (nodeId: number) => {
-            NodeConvertSystem.startConvert(this._nodes[nodeId], NodeType.MARKET, OwnerType.PLAYER);
-            this._mapView.refreshNodeViews(this._nodes);
-            if (this.nodePanel) this.nodePanel.refreshPanel();
-        });
-        EventBus.on(GameEvents.NODE_RECRUIT, (nodeId: number, count: number) => {
-            RecruitSystem.startRecruit(this._nodes[nodeId], OwnerType.PLAYER, count);
-            this._mapView.refreshNodeViews(this._nodes);
-            if (this.nodePanel) this.nodePanel.refreshPanel();
-        });
-        EventBus.on(GameEvents.NODE_SEND_TROOPS, (nodeId: number, count: number) => {
-            const srcNode = this._nodes[nodeId];
-            if (count <= 0 || count > srcNode.garrisonCount) return;
-            this._pendingSendTroops = { nodeId, count };
-            if (this.nodePanel) this.nodePanel.node.active = false;
-        });
-        EventBus.on(GameEvents.NODE_BATCH_UPGRADE_ALL, () => {
-            NodeUpgradeSystem.batchUpgrade(this._nodes, 'all', OwnerType.PLAYER, PathfindingManager.adjList);
-            this._mapView.refreshNodeViews(this._nodes);
-            if (this.nodePanel) this.nodePanel.refreshPanel();
-        });
-        EventBus.on(GameEvents.NODE_BATCH_UPGRADE_FORTRESS, () => {
-            NodeUpgradeSystem.batchUpgrade(this._nodes, 'fortress', OwnerType.PLAYER, PathfindingManager.adjList);
-            this._mapView.refreshNodeViews(this._nodes);
-            if (this.nodePanel) this.nodePanel.refreshPanel();
-        });
-        EventBus.on(GameEvents.NODE_BATCH_UPGRADE_MARKET, () => {
-            NodeUpgradeSystem.batchUpgrade(this._nodes, 'market', OwnerType.PLAYER, PathfindingManager.adjList);
-            this._mapView.refreshNodeViews(this._nodes);
-            if (this.nodePanel) this.nodePanel.refreshPanel();
-        });
-        EventBus.on(GameEvents.PANEL_CLOSE_NODE, () => {
-            if (this.nodePanel) this.nodePanel.node.active = false;
-        });
-
-        EventBus.on(GameEvents.EDGE_UPGRADE, (edgeId: number) => {
-            const edge = this._edges.find(e => e.id === edgeId);
-            if (!edge) return;
-            EdgeUpgradeSystem.upgradeEdge(edge, this._nodes, OwnerType.PLAYER);
-            if (this.edgePanel) this.edgePanel.refresh();
-            this._mapView.refreshNodeViews(this._nodes);
-        });
-        EventBus.on(GameEvents.PANEL_CLOSE_EDGE, () => {
-            if (this.edgePanel) this.edgePanel.node.active = false;
-        });
-
-        EventBus.on(GameEvents.PANEL_CLOSE_ARMY, () => {
-            if (this.armyPanel) this.armyPanel.node.active = false;
-        });
-
-        EventBus.on(GameEvents.GAME_RESTART, () => director.loadScene('LobbyScene'));
-        EventBus.on(GameEvents.GAME_LOBBY,   () => director.loadScene('LobbyScene'));
-
-        EventBus.on(GameEvents.SAVE_LOAD_SLOT, (slotId: number) => this.loadGame(slotId));
-        EventBus.on(GameEvents.SAVE_SLOTS_CLOSE, () => {
-            if (this.saveSlotsUI) this.saveSlotsUI.node.active = false;
-        });
-
-        EventBus.on(GameEvents.GAME_PAUSE_TOGGLE, () => this.togglePause());
-        EventBus.on(GameEvents.GAME_SPEED_CHANGED, (s: GameSpeed) => {
-            this.setGameSpeed(s);
-            if (this.hud) this.hud.bindSpeed(s);
-        });
-
-        EventBus.on(GameEvents.ARMY_ARRIVED_AT_NODE, (army: ArmyEntity, nodeId: number) => {
-            this.handleArmyArrival(army, nodeId);
-            this._armies = ArmyManager.armies;
-        });
-        EventBus.on(GameEvents.ARMY_EDGE_ENCOUNTER, (armyA: ArmyEntity, armyB: ArmyEntity) => {
-            this.handleEdgeEncounter(armyA, armyB);
-            this._armies = ArmyManager.armies;
-        });
-
-        EventBus.on(GameEvents.BATTLE_NODE_RESULT, (result: NodeBattleResult) => {
-            if (result.outcome === NodeBattleOutcome.ATTACKER_WINS || result.outcome === NodeBattleOutcome.DEFENDER_WINS) {
-                FogSystem.recordAttack(result.node, result.attackerArmy.ownerId);
-            }
-        });
-
-        EventBus.on(GameEvents.RANDOM_HARVEST, (totalGold: number) => {
-            console.log(`[GameManager] 丰收! 金币 +${totalGold}`);
-        });
-        EventBus.on(GameEvents.RANDOM_WAR_MOBILIZATION, (duration: number) => {
-            console.log(`[GameManager] 战争动员! 所有方征兵时间减半 ${duration.toFixed(1)}s`);
+        GameEventBinder.bindAll({
+            nodes: this._nodes,
+            edges: this._edges,
+            mapView: this._mapView,
+            nodePanel: this.nodePanel,
+            edgePanel: this.edgePanel,
+            armyPanel: this.armyPanel,
+            saveSlotsUI: this.saveSlotsUI,
+            hud: this.hud,
+            loadGame: (slotId) => this.loadGame(slotId),
+            togglePause: () => this.togglePause(),
+            setGameSpeed: (s) => this.setGameSpeed(s),
+            handleArmyArrival: (army, nodeId) => this.handleArmyArrival(army, nodeId),
+            handleEdgeEncounter: (armyA, armyB) => this.handleEdgeEncounter(armyA, armyB),
+            syncArmies: () => { this._armies = ArmyManager.armies; },
+            setPendingSendTroops: (v) => { this._pendingSendTroops = v; },
         });
     }
 
