@@ -48,7 +48,7 @@ export class ArmyManager {
         army.currentEdgeIndex++;
         army.progress = 0;
         ArmyManager.execPendingReroute(army, army.currentNodeId);
-        console.log(`[ArmyManager] 军队#${armyId} 越过己方节点#${army.currentNodeId}，进入边 ${army.currentNodeId}→${army.nextNodeId}`);
+        // console.log(`[ArmyManager] 军队#${armyId} 越过己方节点#${army.currentNodeId}，进入边 ${army.currentNodeId}→${army.nextNodeId}`);
     }
 
     // 每帧行军推进（传入逻辑时间增量 dt 秒），事件通过 EventBus 发送
@@ -58,7 +58,7 @@ export class ArmyManager {
         for (const army of ArmyManager._armies) {
             // 军队不在移动状态或士兵数为0，标记移除
             if (army.state !== ArmyState.MOVING || army.soldierCount <= 0) {
-                console.log(`[ArmyManager] 军队#${army.id} 状态异常（state=${army.state}, soldiers=${army.soldierCount}），移除`);
+                // console.log(`[ArmyManager] 军队#${army.id} 状态异常（state=${army.state}, soldiers=${army.soldierCount}），移除`);
                 toRemove.push(army.id);
                 continue;
             }
@@ -66,8 +66,8 @@ export class ArmyManager {
             // 查找当前所在边
             const edge = PathfindingManager.findEdge(army.currentNodeId, army.nextNodeId);
             if (!edge) {
-                console.warn(`[ArmyManager] 军队#${army.id} 所在边不存在（${army.currentNodeId} -> ${army.nextNodeId}），移除`);
-                console.log(`progress ${army.progress}`)
+                // console.warn(`[ArmyManager] 军队#${army.id} 所在边不存在（${army.currentNodeId} -> ${army.nextNodeId}），移除`);
+                // console.log(`progress ${army.progress}`)
                 toRemove.push(army.id);
                 continue;
             }
@@ -88,7 +88,7 @@ export class ArmyManager {
 
                 if (army.destinationNodeId === arrivedNodeId) {
                     // 到达最终终点，标记移除
-                    console.log(`[ArmyManager] 军队#${army.id} 到达最终终点节点#${arrivedNodeId}`);
+                    // console.log(`[ArmyManager] 军队#${army.id} 到达最终终点节点#${arrivedNodeId}`);
                     toRemove.push(army.id);
                 }
                 // 中间节点：不自动跳到下一条边，由 GameManager.handleArmyArrival 决定
@@ -97,7 +97,7 @@ export class ArmyManager {
 
         // 清理已到达/覆灭的军队
         for (const id of toRemove) {
-            console.log(`[ArmyManager] 移除军队#${id}`);
+            // console.log(`[ArmyManager] 移除军队#${id}`);
             ArmyManager.removeArmy(id);
         }
 

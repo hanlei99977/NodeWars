@@ -92,7 +92,7 @@ export class SceneBuilder extends Component {
     // ======================== LOBBY ========================
 
     private buildLobby(canvas: Node): void {
-        const lx = -240;
+        const lx = -160;
         const bw = 90;
         const bh = 44;
         let y = 260;
@@ -118,7 +118,7 @@ export class SceneBuilder extends Component {
 
         y -= gap;
         makeLabel(canvas, 'FogLabel', '迷雾：关闭',   lx, y, 200, 32, 22);
-        const fB = makeBtn(canvas, 'FogToggle', '切换', lx + 160, y, bw, bh);
+        const fB = makeBtn(canvas, 'FogToggle', '切换', lx + 200, y, bw, bh);
 
         y -= gap;
         makeLabel(canvas, 'SpeedLabel', '1x',         lx, y, 140, 32, 22);

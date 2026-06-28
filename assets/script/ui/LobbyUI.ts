@@ -28,8 +28,8 @@ const DIFFICULTY_DESC: Record<Difficulty, string> = {
 
 // 迷雾显示名
 const FOG_NAMES: Record<FogMode, string> = {
-    [FogMode.NONE]: '关闭',
-    [FogMode.FOG]: '开启',
+    [FogMode.NONE]: '迷雾：关闭',
+    [FogMode.FOG]: '迷雾：开启',
 };
 
 // 大厅 UI 组件，负责地图/难度/迷雾/速度等参数选择和开始游戏
