@@ -554,6 +554,16 @@ export class MapViewManager {
         const nodeB = this._nodes[army.pathNodeIds[army.currentEdgeIndex + 1]];
         if (!nodeA || !nodeB) return;
         const t = army.progress;
+        if (FogSystem.isNodeCurrentlyVisible(nodeA.id,OwnerType.PLAYER) && 
+            FogSystem.isNodeCurrentlyVisible(nodeB.id,OwnerType.PLAYER))
+        {
+            vn.active = true;
+        }
+        else 
+        {
+            vn.active = false;
+            // console.log(`军队 不可见`)
+        }
         vn.setPosition(
             nodeA.position.x + (nodeB.position.x - nodeA.position.x) * t,
             nodeA.position.y + (nodeB.position.y - nodeA.position.y) * t,

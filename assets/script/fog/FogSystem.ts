@@ -2,6 +2,7 @@ import { NodeEntity } from '../entity/NodeEntity';
 import { NodeType, OwnerType, FogMode } from '../config/EnumDefine';
 import { GameConfig } from '../config/GameConfig';
 import { EconomySystem } from '../economy/EconomySystem';
+import { MapGenerator } from '../map/MapGenerator'
 
 // 单个节点对某方的迷雾情报记录
 export class FogRecord {
@@ -58,11 +59,7 @@ export class FogSystem {
         FogSystem._fogData.clear();
 
         // 构建邻接表
-        FogSystem._adjList = Array.from({ length: nodes.length }, () => []);
-        for (const e of edges) {
-            FogSystem._adjList[e.nodeAId].push(e.nodeBId);
-            FogSystem._adjList[e.nodeBId].push(e.nodeAId);
-        }
+        FogSystem._adjList = MapGenerator.adjList;
         // 无雾模式则返回
         if (fogMode === FogMode.NONE) return;
 
